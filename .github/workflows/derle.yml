@@ -25,7 +25,8 @@ jobs:
       - name: Sürüm numarası
         id: ver
         shell: bash
-        run: echo "v=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "v=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')" >> "$GITHUB_OUTPUT"
 
       - name: Sürüm notu
         id: notes
@@ -96,7 +97,8 @@ jobs:
 
       - name: Sürüm numarası
         id: ver
-        run: echo "v=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')" >> "$GITHUB_OUTPUT"
+        run: |
+          echo "v=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')" >> "$GITHUB_OUTPUT"
 
       - name: Sürüm notu
         id: notes
