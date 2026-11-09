@@ -1,0 +1,155 @@
+name: Derle
+
+# main'e her gönderimde Windows (kurulum programı + zip) ve Android (apk) derlenir ve
+# pubspec.yaml'daki sürüm numarasıyla (ör. v0.1.0) Releases sayfasına eklenir.
+# Yeni sürüm için pubspec.yaml'da version'ı artır. Uygulama, Releases'taki en yeni sürüme bakarak güncellenir.
+#
+# Android imzası: Settings → Secrets and variables → Actions'a
+#   ANDROID_KEYSTORE_BASE64, ANDROID_KEYSTORE_PASSWORD
+# eklenirse her sürüm aynı anahtarla imzalanır (Pusula'dakiyle aynı anahtar kullanılabilir).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    name: Windows (.exe)
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Sürüm numarası
+        id: ver
+        shell: bash
+        run: echo "v=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')" >> "$GITHUB_OUTPUT"
+
+      - name: Sürüm notu
+        id: notes
+        shell: bash
+        run: |
+          awk -v v="${{ steps.ver.outputs.v }}" '/^## /{p=($2==v); next} p' release-notes.md > notes.txt 2>/dev/null || true
+          if [ -s notes.txt ]; then echo "path=notes.txt" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: Platform klasörünü hazırla
+        shell: bash
+        run: bash scripts/platform_hazirla.sh windows
+
+      - run: flutter pub get
+
+      - name: Uygulama ikonu
+        run: dart run flutter_launcher_icons -f icons_windows.yaml
+
+      - name: Kod analizi
+        shell: bash
+        run: bash scripts/ozetle.sh analiz flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Derle
+        shell: bash
+        run: bash scripts/ozetle.sh windows flutter build windows --release --dart-define=APP_VERSION=${{ steps.ver.outputs.v }}
+
+      - name: Paketle (zip)
+        shell: pwsh
+        run: Compress-Archive -Path build/windows/x64/runner/Release/* -DestinationPath Pusula-Kopru-Windows.zip
+
+      - name: Kurulum programı
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (!(Test-Path $iscc)) { choco install innosetup -y --no-progress | Out-Null }
+          & $iscc "/DAppVersion=${{ steps.ver.outputs.v }}" installer\pusula_kopru.iss
+          if ($LASTEXITCODE -ne 0) { Write-Output "::error title=kurulum::Inno Setup derlenemedi"; exit 1 }
+          Copy-Item dist\Pusula-Kopru-Kurulum.exe .
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pusula-Kopru-Windows
+          path: |
+            Pusula-Kopru-Kurulum.exe
+            Pusula-Kopru-Windows.zip
+
+      - name: Sürüme ekle
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          name: Pusula Köprü ${{ steps.ver.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          body_path: ${{ steps.notes.outputs.path }}
+          files: |
+            Pusula-Kopru-Kurulum.exe
+            Pusula-Kopru-Windows.zip
+
+  android:
+    name: Android (.apk)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+
+      - name: Sürüm numarası
+        id: ver
+        run: echo "v=$(grep '^version:' pubspec.yaml | sed 's/version: *//; s/+.*//')" >> "$GITHUB_OUTPUT"
+
+      - name: Sürüm notu
+        id: notes
+        run: |
+          awk -v v="${{ steps.ver.outputs.v }}" '/^## /{p=($2==v); next} p' release-notes.md > notes.txt 2>/dev/null || true
+          if [ -s notes.txt ]; then echo "path=notes.txt" >> "$GITHUB_OUTPUT"; fi
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - name: İmza anahtarı
+        env:
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PW: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: |
+          if [ -n "$KEYSTORE_B64" ] && [ -n "$KEYSTORE_PW" ]; then
+            echo "$KEYSTORE_B64" | base64 -d > "$RUNNER_TEMP/oa.jks"
+            echo "OA_KEYSTORE_PATH=$RUNNER_TEMP/oa.jks" >> "$GITHUB_ENV"
+            echo "OA_KEYSTORE_PASSWORD=$KEYSTORE_PW" >> "$GITHUB_ENV"
+          fi
+
+      - name: Platform klasörünü hazırla
+        run: bash scripts/platform_hazirla.sh android
+
+      - run: flutter pub get
+
+      - name: Uygulama ikonu
+        run: dart run flutter_launcher_icons -f icons_android.yaml
+
+      - name: Derle
+        run: bash scripts/ozetle.sh android flutter build apk --release --dart-define=APP_VERSION=${{ steps.ver.outputs.v }}
+
+      - name: Yeniden adlandır
+        run: cp build/app/outputs/flutter-apk/app-release.apk Pusula-Kopru-Android.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Pusula-Kopru-Android
+          path: Pusula-Kopru-Android.apk
+
+      - name: Sürüme ekle
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.ver.outputs.v }}
+          name: Pusula Köprü ${{ steps.ver.outputs.v }}
+          target_commitish: ${{ github.sha }}
+          make_latest: true
+          body_path: ${{ steps.notes.outputs.path }}
+          files: Pusula-Kopru-Android.apk

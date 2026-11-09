@@ -1,0 +1,8 @@
+# Android uygulama ikonu: dart run flutter_launcher_icons -f icons_android.yaml
+flutter_launcher_icons:
+  android: "launcher_icon"
+  ios: false
+  image_path: "assets/icon/icon.png"
+  adaptive_icon_background: "#151824"
+  adaptive_icon_foreground: "assets/icon/foreground.png"
+  min_sdk_android: 21
