@@ -1,5 +1,8 @@
 # Sürüm notları
 
+## 0.1.1
+- Bağlantı hatalarında sunucunun daha sağlam davranması
+
 ## 0.1.0
 İlk deneme sürümü.
 - QR kodla eşleştirme (telefon bilgisayardaki kodu okutur) ya da 6 haneli kodla eşleştirme

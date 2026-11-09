@@ -243,19 +243,19 @@ class Kopru extends ChangeNotifier {
     try {
       final path = req.uri.path;
       if (req.method == 'GET' && path == '/v1/hello') {
-        return _replyJson(req, {'k': _kMagic, 'id': myId, 'n': myName, 'p': platform, 'v': appVersion});
+        return await _replyJson(req, {'k': _kMagic, 'id': myId, 'n': myName, 'p': platform, 'v': appVersion});
       }
       if (req.method == 'GET' && path == '/v1/pair/info') {
         final s = pairSession;
-        if (s == null || s.expired) return _reply(req, 404);
-        return _replyJson(req, {'id': myId, 'n': myName, 'p': platform, 'pub': b64u(s.pub)});
+        if (s == null || s.expired) return await _reply(req, 404);
+        return await _replyJson(req, {'id': myId, 'n': myName, 'p': platform, 'pub': b64u(s.pub)});
       }
-      if (req.method == 'POST' && path == '/v1/pair') return _handlePair(req);
+      if (req.method == 'POST' && path == '/v1/pair') return await _handlePair(req);
 
       final peer = peerById(req.headers.value('x-k-from'));
       if (peer == null) {
         await _readAll(req, 1 << 20).catchError((_) => Uint8List(0));
-        return _reply(req, 403);
+        return await _reply(req, 403);
       }
       if (req.method == 'POST' && path == '/v1/msg') {
         final body = await _readAll(req, 4 << 20);
@@ -263,17 +263,17 @@ class Kopru extends ChangeNotifier {
         try {
           m = await peer.key.openJson(body);
         } catch (_) {
-          return _reply(req, 403);
+          return await _reply(req, 403);
         }
-        if (!_fresh(m)) return _reply(req, 409);
+        if (!_fresh(m)) return await _reply(req, 409);
         _seen(peer, req.connectionInfo?.remoteAddress.address, int.tryParse(req.headers.value('x-k-port') ?? ''));
         final out = await _onMessage(peer, m) ?? <String, dynamic>{'ok': true};
-        return _reply(req, 200, await peer.key.sealJson(out));
+        return await _reply(req, 200, await peer.key.sealJson(out));
       }
-      if (req.method == 'POST' && path == '/v1/file') return _receiveFile(req, peer);
-      return _reply(req, 404);
+      if (req.method == 'POST' && path == '/v1/file') return await _receiveFile(req, peer);
+      return await _reply(req, 404);
     } catch (_) {
-      return _reply(req, 400);
+      return await _reply(req, 400);
     }
   }
 
@@ -1041,7 +1041,7 @@ class Kopru extends ChangeNotifier {
       await for (final data in req) {
         if (gotLast) continue;
         if (buf.isEmpty) {
-          buf = data is Uint8List ? data : Uint8List.fromList(data);
+          buf = data;
         } else {
           final b = BytesBuilder(copy: false)
             ..add(buf)
