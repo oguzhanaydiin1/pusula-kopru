@@ -135,6 +135,9 @@ jobs:
       - name: Uygulama ikonu
         run: dart run flutter_launcher_icons -f icons_android.yaml
 
+      - name: Eklenti düzeltmesi
+        run: bash scripts/eklenti_duzelt.sh
+
       - name: Derle
         run: bash scripts/ozetle.sh android flutter build apk --release --dart-define=APP_VERSION=${{ steps.ver.outputs.v }}
 
