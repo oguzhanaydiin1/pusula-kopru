@@ -1,5 +1,8 @@
 # Sürüm notları
 
+## 0.3.2
+- Android: Google Play Protect'in kurulumu engellemesi düzeltildi. Play Protect, Play Store dışından kurulan ve bildirim erişimi isteyen uygulamaları engellediği için bildirim aynası standart sürümden çıkarıldı; diğer bütün özellikler duruyor.
+
 ## 0.3.1
 - Bilgisayarda "Güncelle" düğmesi, uygulama uzun süre açık kalsa da yeni sürüm çıkınca belirir (6 saatte bir bakar; Ayarlar'dan denetleyince de hemen çıkar).
 

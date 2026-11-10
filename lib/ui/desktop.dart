@@ -417,7 +417,7 @@ class _DesktopHomeState extends State<DesktopHome> {
               )
             : Column(children: [a, const SizedBox(height: 20), b]);
       }),
-      if (sel.isPhone) ...[
+      if (sel.isPhone && k.phoneNotifs.any((n) => n.peerId == sel.id)) ...[
         const SizedBox(height: 20),
         _notifCard(sel),
       ],

@@ -117,6 +117,14 @@ object NativeBridge {
                 }
                 "isForeground" -> result.success(activityRef?.get() != null)
                 "notificationAccess" -> result.success(NotifListener.hasAccess(app))
+                "mirrorAvailable" -> result.success(
+                    try {
+                        app.packageManager.getServiceInfo(android.content.ComponentName(app, NotifListener::class.java), 0)
+                        true
+                    } catch (_: Exception) {
+                        false
+                    }
+                )
                 "openNotificationAccess" -> {
                     try {
                         app.startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

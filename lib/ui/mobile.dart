@@ -488,6 +488,7 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
   UpdateInfo? get _update => updateAvailable.value;
   set _update(UpdateInfo? v) => updateAvailable.value = v;
   bool? _access;
+  bool _mirrorAvailable = false;
 
   @override
   void initState() {
@@ -510,7 +511,13 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
 
   Future<void> _checkAccess() async {
     final a = await Native.notificationAccess();
-    if (mounted) setState(() => _access = a);
+    final m = await Native.mirrorAvailable();
+    if (mounted) {
+      setState(() {
+        _access = a;
+        _mirrorAvailable = m;
+      });
+    }
   }
 
   Future<void> _toggleMirror(bool on) async {
@@ -590,7 +597,8 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
             k.background,
             k.setBackground,
           ),
-          const SizedBox(height: 16),
+          if (_mirrorAvailable) const SizedBox(height: 16),
+          if (_mirrorAvailable)
           _switchRow(
             'Bildirimleri bilgisayara ilet',
             _access == false && k.mirror

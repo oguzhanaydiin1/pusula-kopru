@@ -23,7 +23,6 @@ PERMS = [
     'android.permission.CHANGE_WIFI_MULTICAST_STATE',
     'android.permission.CAMERA',
     'android.permission.VIBRATE',
-    'android.permission.REQUEST_INSTALL_PACKAGES',
     'android.permission.POST_NOTIFICATIONS',
     'android.permission.FOREGROUND_SERVICE',
     'android.permission.FOREGROUND_SERVICE_CONNECTED_DEVICE',
@@ -32,11 +31,9 @@ PERMS = [
 ]
 
 # Arka plan hizmeti, açılışta başlatma ve (0.3) bildirim aynası
-COMPONENTS = '''
-        <service
-            android:name=".KopruService"
-            android:exported="false"
-            android:foregroundServiceType="connectedDevice"/>
+# Bildirim aynası (NotificationListenerService). Google Play Protect, Play dışından kurulan ve
+# bildirim erişimi isteyen uygulamaları engelliyor; bu yüzden yalnız KOPRU_MIRROR=1 ile eklenir.
+MIRROR = '''
         <service
             android:name=".NotifListener"
             android:label="Pusula Köprü"
@@ -46,6 +43,13 @@ COMPONENTS = '''
                 <action android:name="android.service.notification.NotificationListenerService"/>
             </intent-filter>
         </service>
+'''
+
+COMPONENTS = '''
+        <service
+            android:name=".KopruService"
+            android:exported="false"
+            android:foregroundServiceType="connectedDevice"/>
         <receiver android:name=".BootReceiver" android:exported="true">
             <intent-filter>
                 <action android:name="android.intent.action.BOOT_COMPLETED"/>
@@ -77,8 +81,9 @@ def manifest():
     if 'READ_EXTERNAL_STORAGE' not in s:
         s = s.replace('<application', '<uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32"/>\n    <application', 1)
     if '.KopruService' not in s:
+        comp = COMPONENTS + (MIRROR if os.environ.get('KOPRU_MIRROR') == '1' else '')
         i = s.rfind('</application>')
-        s = s[:i] + COMPONENTS.strip('\n') + '\n    ' + s[i:]
+        s = s[:i] + comp.strip('\n') + '\n    ' + s[i:]
     if 'WRITE_EXTERNAL_STORAGE' not in s:
         s = s.replace('<application', '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>\n    <application', 1)
     if 'android.hardware.camera' not in s:

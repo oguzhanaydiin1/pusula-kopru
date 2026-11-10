@@ -86,6 +86,8 @@ class Native {
   }
 
   // Bildirim aynası (0.3)
+  /// Bu APK'da bildirim aynası var mı (standart APK'da yok; bkz. android_ayarla.py)
+  static Future<bool> mirrorAvailable() async => await _call<bool>('mirrorAvailable') ?? false;
   static Future<bool> notificationAccess() async => await _call<bool>('notificationAccess') ?? false;
   static Future<void> openNotificationAccess() => _call('openNotificationAccess');
   static Future<bool> replyNotification(String key, String text) async =>
