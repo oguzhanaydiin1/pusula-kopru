@@ -595,7 +595,7 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
       builder: (ctx) => AlertDialog(
         title: Text(L('Hangi fotoğraflar?'), style: oaDisplay(22)),
         content: Text(
-          L('Yedek {0} bilgisayarına, aynı Wi-Fi\'deyken gider. Telefondaki bütün fotoğraf ve videolar mı, ', [pcs.first.name])
+          L('Yedek {0} bilgisayarına, aynı Wi-Fi\'deyken gider. Telefondaki bütün fotoğraf ve videolar mı, ', [pcs.first.name]) +
           L('yoksa yalnız bundan sonra çektiklerin mi?'),
           style: oaBody(15, color: OA.text2, height: 1.5),
         ),
@@ -620,8 +620,8 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
       builder: (ctx) => AlertDialog(
         title: Text(L('Bildirim erişimi'), style: oaDisplay(22)),
         content: Text(
-          L('Açılan ekranda Pusula Köprü\'yü bul ve izni aç.\n\n')
-          L('İzin gri ve açılmıyorsa: Ayarlar → Uygulamalar → Pusula Köprü → sağ üstteki ⋮ → ')
+          L('Açılan ekranda Pusula Köprü\'yü bul ve izni aç.\n\n') +
+          L('İzin gri ve açılmıyorsa: Ayarlar → Uygulamalar → Pusula Köprü → sağ üstteki ⋮ → ') +
           L('"Kısıtlanmış ayarlara izin ver", sonra tekrar dene. (Android bunu Google Play dışından kurulan uygulamalarda ister.)'),
           style: oaBody(15, color: OA.text2, height: 1.5),
         ),
@@ -683,7 +683,7 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
           SizedBox(height: 24),
           _switchRow(
             L('Arka planda çalış'),
-            L('Uygulama kapalıyken de bilgisayardan gelen dosyaları alır ve "Telefonu çaldır" çalışır. ')
+            L('Uygulama kapalıyken de bilgisayardan gelen dosyaları alır ve "Telefonu çaldır" çalışır. ') +
                 L('Bildirim çubuğunda sessiz bir "Pusula Köprü açık" bildirimi durur.'),
             k.background,
             k.setBackground,
@@ -705,8 +705,8 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
             L('Fotoğrafları bilgisayara yedekle'),
             k.backupOn
                 ? (k.backupRunning
-                    ? 'Yedekleniyor…'
-                    : L('{0} · {1} öğe', [k.peerById(k.backupPeerId)?.name ?? L('Bilgisayar'), k.backupCount])
+                    ? L('Yedekleniyor…')
+                    : L('{0} · {1} öğe', [k.peerById(k.backupPeerId)?.name ?? L('Bilgisayar'), k.backupCount]) +
                         L('{0}. Yalnız aynı Wi-Fi\'de, mobil veri harcamaz.', [k.backupLast != null ? L(' · son: {0}', [timeAgo(k.backupLast!)]) : '']))
                 : L('Yeni fotoğraf ve videolar, bilgisayarla aynı Wi-Fi\'deyken Resimler\\Pusula Köprü klasörüne kopyalanır.'),
             k.backupOn,
@@ -725,7 +725,7 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
           SizedBox(height: 16),
           _switchRow(
             L('Farklı ağdayken de bağlan'),
-            L('Bilgisayarla aynı Wi-Fi\'de değilken (mobil veri, iş yeri) OA sunucusu üzerinden, uçtan uca şifreli. ')
+            L('Bilgisayarla aynı Wi-Fi\'de değilken (mobil veri, iş yeri) OA sunucusu üzerinden, uçtan uca şifreli. ') +
                 L('Dosya başına en fazla 100 MB.'),
             k.relayOn,
             k.setRelay,
@@ -764,7 +764,7 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
             else
               TextButton(
                 onPressed: () async {
-                  setState(() => _updateText = 'Denetleniyor…');
+                  setState(() => _updateText = L('Denetleniyor…'));
                   final u = await Updater.check();
                   if (mounted) {
                     setState(() {
@@ -1108,7 +1108,7 @@ class SendingScreen extends StatelessWidget {
                 SizedBox(height: 6),
                 Center(
                   child: Text(
-                    L('{0} / {1} dosya · {2} / {3}', [count, items.length, formatSize(done), formatSize(total)])
+                    L('{0} / {1} dosya · {2} / {3}', [count, items.length, formatSize(done), formatSize(total)]) +
                     '${speed > 0 && !finished ? L(' · {0}/sn', [formatSize(speed.round())]) : ''}',
                     style: oaBody(15, color: OA.text2),
                   ),
@@ -1159,7 +1159,7 @@ class NearbyScreen extends StatelessWidget {
       body: ListView(
         padding: EdgeInsets.all(16),
         children: [
-          Text(L('Eşleştirmeden, aynı Wi-Fi\'deki birine tek seferlik dosya gönder ya da al. ')
+          Text(L('Eşleştirmeden, aynı Wi-Fi\'deki birine tek seferlik dosya gönder ya da al. ') +
               L('Karşı taraf her gönderimi onaylar; dosyalar şifreli gider.'),
               style: oaBody(15, color: OA.text2, height: 1.5)),
           SizedBox(height: 16),

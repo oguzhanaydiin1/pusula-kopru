@@ -51,7 +51,7 @@ class _KopruAppState extends State<KopruApp> {
       theme: buildTheme(),
       darkTheme: buildTheme(),
       themeMode: ThemeMode.dark,
-      home: Platform.isAndroid ? const MobileShell() : const DesktopHome(),
+      home: Platform.isAndroid ? MobileShell() : DesktopHome(),
     );
   }
 }

@@ -144,7 +144,7 @@ class _DesktopHomeState extends State<DesktopHome> {
             width: 480,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Text(L('Eşleştirmeden, aynı Wi-Fi\'deki birine tek seferlik dosya gönder ya da al. ')
+                Text(L('Eşleştirmeden, aynı Wi-Fi\'deki birine tek seferlik dosya gönder ya da al. ') +
                     L('Karşı taraf her gönderimi onaylar; dosyalar şifreli gider.'),
                     style: oaBody(15, color: OA.text2, height: 1.5)),
                 SizedBox(height: 16),
@@ -263,7 +263,7 @@ class _DesktopHomeState extends State<DesktopHome> {
             Text(L('Telefonunu bağla'), textAlign: TextAlign.center, style: oaDisplay(34)),
             SizedBox(height: 12),
             Text(
-              L('Telefona Pusula Köprü\'yü kur, aynı Wi-Fi\'ye bağlan ve bilgisayardaki QR kodu okut. ')
+              L('Telefona Pusula Köprü\'yü kur, aynı Wi-Fi\'ye bağlan ve bilgisayardaki QR kodu okut. ') +
               L('Sonra dosyalar, bağlantılar ve pano iki cihaz arasında doğrudan ve şifreli gider.'),
               textAlign: TextAlign.center,
               style: oaBody(17, color: OA.text2, height: 1.6),
@@ -519,7 +519,7 @@ class _DesktopHomeState extends State<DesktopHome> {
           Padding(
             padding: EdgeInsets.only(top: 4, bottom: 4),
             child: Text(
-              L('Telefona gelen WhatsApp, SMS ve diğer bildirimler burada görünür; yanıt verilebilenlere buradan yanıt yazabilirsin. ')
+              L('Telefona gelen WhatsApp, SMS ve diğer bildirimler burada görünür; yanıt verilebilenlere buradan yanıt yazabilirsin. ') +
               L('Açmak için telefonda Pusula Köprü → Ayarlar → "Bildirimleri bilgisayara ilet".'),
               style: oaBody(15, color: OA.muted, height: 1.5),
             ),
@@ -928,7 +928,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
               Expanded(child: Text(L('Sürüm {0}', [appVersion == '0.0.0' ? L('geliştirme') : appVersion]), style: oaBody(14, color: OA.muted))),
               TextButton(
                 onPressed: () async {
-                  setState(() => _updateText = 'Denetleniyor…');
+                  setState(() => _updateText = L('Denetleniyor…'));
                   final u = await Updater.check();
                   if (!mounted) return;
                   if (u == null) {

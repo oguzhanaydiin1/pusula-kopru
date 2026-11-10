@@ -351,4 +351,6 @@ const _en = <String, String>{
   'Fotoğraflara erişim izni ver, sonra tekrar dene': 'Allow photo access, then try again',
   'Ekran görüntüsü bulunamadı': 'No screenshot found',
   'metin': 'text',
+  'Yedekleniyor…': 'Backing up…',
+  'Denetleniyor…': 'Checking…',
 };
