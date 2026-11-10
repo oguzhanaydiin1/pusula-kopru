@@ -3,6 +3,7 @@ package dev.oalabs.pusula_kopru
 import android.content.Context
 import android.content.Intent
 import android.os.Bundle
+import android.widget.Toast
 import io.flutter.embedding.android.FlutterActivity
 
 /**
@@ -57,5 +58,11 @@ class MainActivity : FlutterActivity() {
         Thread {
             NativeBridge.readShare(ctx, copy)?.let { NativeBridge.deliverShare(it) }
         }.start()
+        // Pusula'dan "Bilgisayara gönder": Köprü ekranı açılmadan gönderip geri çekil
+        // (uygulama zaten çalışıyorsa; soğuk açılışta ekran açık kalır ki motor hazırlansın)
+        if (copy.getBooleanExtra("dev.oalabs.kopru.OPEN", false) && NativeBridge.isDartReady()) {
+            Toast.makeText(this, "Bilgisayara gönderiliyor", Toast.LENGTH_SHORT).show()
+            finish()
+        }
     }
 }

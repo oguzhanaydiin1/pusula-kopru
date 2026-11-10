@@ -1,5 +1,8 @@
 # Sürüm notları
 
+## 0.2.1
+- Pusula Browser'daki "Bilgisayara gönder" Köprü ekranını açmadan çalışır.
+
 ## 0.2.0
 - **Arka planda çalışma (Android):** Uygulama kapalıyken de bilgisayardan gelen dosya, bağlantı ve "Telefonu çaldır" alınır. Telefon yeniden başlayınca kendiliğinden açılır. Ayarlar'dan kapatılabilir.
 - **Bildirimler:** Telefona dosya ya da bağlantı gelince bildirim; dokununca açılır. Bilgisayarda Windows bildirimi.

@@ -9,6 +9,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../core/models.dart';
 import '../core/native.dart';
 import '../core/node.dart';
+import '../core/notifier.dart';
 import '../theme.dart';
 import '../updater.dart';
 import 'desktop.dart' show TransferRow, confirmUnpair;
@@ -111,7 +112,12 @@ class _MobileShellState extends State<MobileShell> with WidgetsBindingObserver {
     }
     final text = s['text']?.toString() ?? '';
     if (text.isEmpty) return;
-    final ok = await k.sendText(p, text, open: s['open'] == true);
+    final open = s['open'] == true;
+    final ok = await k.sendText(p, text, open: open);
+    if (open && !ok) {
+      // Pusula'dan gönderildi, Köprü ekranı kapalı: sonucu bildirimle söyle
+      await Notifier.show('Gönderilemedi', '${p.name} bağlı değil. Aynı Wi-Fi\'de ve Pusula Köprü açık mı?', always: true);
+    }
     if (mounted) showSnack(context, ok ? '${p.name} cihazına gönderildi' : '${p.name} bağlı değil');
   }
 

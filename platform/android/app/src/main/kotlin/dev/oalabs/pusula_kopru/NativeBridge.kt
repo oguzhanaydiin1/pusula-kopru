@@ -136,6 +136,8 @@ object NativeBridge {
         }
     }
 
+    fun isDartReady(): Boolean = dartReady
+
     fun setActivity(a: Activity?) {
         activityRef = if (a == null) null else WeakReference(a)
     }
