@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
+import 'package:cryptography/cryptography.dart' show Hmac, SecretKey;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -17,6 +18,7 @@ import 'models.dart';
 import 'native.dart';
 import 'notifier.dart';
 import 'relay.dart';
+import 'win_input.dart';
 
 /// Pusula Köprü'nün çekirdeği.
 ///
@@ -41,13 +43,14 @@ class PairSession {
 
 /// Yakındaki, eşleşmeye açık bir cihaz (bilgisayarda "Yeni cihaz eşleştir" penceresi açıkken).
 class NearbyDevice {
-  NearbyDevice(this.id, this.name, this.platform, this.address, this.port, this.seen);
+  NearbyDevice(this.id, this.name, this.platform, this.address, this.port, this.seen, {this.pub});
   final String id;
   final String name;
   final String platform;
   String address;
   int port;
   DateTime seen;
+  Uint8List? pub; // "Yakındakilerden al" açıkken tek seferlik açık anahtar
 }
 
 class Kopru extends ChangeNotifier {
@@ -76,6 +79,30 @@ class Kopru extends ChangeNotifier {
   bool mirror = false; // Android: bildirimleri bilgisayara ilet
   bool relayOn = true; // farklı ağdayken sunucu üzerinden bağlan
   final _relays = <String, RelayLink>{};
+  final _pendingReplies = <String, Completer<Map<String, dynamic>?>>{};
+
+  // Pano geçmişi (yalnız bellekte; şifre gibi görünenler yazılmaz)
+  final clipHistory = <ClipItem>[];
+
+  // Fotoğraf yedekleme (telefon)
+  bool backupOn = false;
+  String? backupPeerId;
+  int backupSince = 0; // saniye
+  int backupCount = 0;
+  DateTime? backupLast;
+  bool backupRunning = false;
+  Timer? _backupTimer;
+  // Bilgisayar: telefonlardan gelen yedek sayısı
+  final backupReceived = <String, int>{};
+  bool browseAllowed = true; // bilgisayar bu telefonun fotoğraflarına göz atabilsin
+
+  // Eşleştirmeden gönderme
+  final visible = <String, NearbyDevice>{}; // "Yakındakilerden al" açık olan cihazlar
+  DateTime? visibleUntil; // bu cihaz görünür mü
+  dynamic _nearKeyPair; // SimpleKeyPair
+  Uint8List? _nearPub;
+  final _offers = <String, NearOffer>{};
+  bool get isVisible => visibleUntil != null && DateTime.now().isBefore(visibleUntil!);
   final phoneNotifs = <PhoneNotif>[]; // Windows: telefondan gelen bildirimler
   String? myClip; // bilgisayarda son kopyalanan
   DateTime? myClipAt;
@@ -130,6 +157,17 @@ class Kopru extends ChangeNotifier {
     autostart = _prefs.getBool('autostart') ?? true;
     mirror = _prefs.getBool('mirror') ?? false;
     relayOn = _prefs.getBool('relay') ?? true;
+    backupOn = _prefs.getBool('backupOn') ?? false;
+    backupPeerId = _prefs.getString('backupPeer');
+    backupSince = _prefs.getInt('backupSince') ?? 0;
+    backupCount = _prefs.getInt('backupCount') ?? 0;
+    final bl = _prefs.getInt('backupLast');
+    if (bl != null) backupLast = DateTime.fromMillisecondsSinceEpoch(bl);
+    browseAllowed = _prefs.getBool('browseAllowed') ?? true;
+    try {
+      final r = jsonDecode(_prefs.getString('backupReceived') ?? '{}') as Map;
+      r.forEach((k, v) => backupReceived[k.toString()] = (v as num).toInt());
+    } catch (_) {}
     _selectedId = _prefs.getString('selected');
     myName = _prefs.getString('name') ?? '';
     if (myName.isEmpty) myName = await _defaultName();
@@ -185,6 +223,10 @@ class Kopru extends ChangeNotifier {
     _announce();
     Future.delayed(const Duration(milliseconds: 600), _probeOffline);
     _ensureRelays();
+    if (isPhone) {
+      _backupTimer = Timer.periodic(const Duration(minutes: 10), (_) => runBackup());
+      Future.delayed(const Duration(seconds: 20), runBackup);
+    }
     notifyListeners();
   }
 
@@ -236,9 +278,23 @@ class Kopru extends ChangeNotifier {
         _receiveRelayed(p, m);
         return;
       }
-      await _onMessage(p, m);
+      if (t == 'reply') {
+        final c = _pendingReplies.remove(m['rid']?.toString());
+        final d = m['data'];
+        c?.complete(d is Map ? Map<String, dynamic>.from(d) : <String, dynamic>{'ok': true});
+        return;
+      }
+      final out = await _onMessage(p, m);
+      final rid = m['rid']?.toString();
+      if (rid != null) {
+        // Sunucu üzerinden gelen soruya yanıt (ör. telefondaki fotoğraf listesi)
+        _relays[p.id]?.send(await p.key.sealJson(_stamp({'t': 'reply', 'rid': rid, 'data': out ?? {'ok': true}})));
+      }
     } catch (_) {}
   }
+
+  /// Yanıt gerektiren iletiler: sunucu üzerinden de yanıt beklenir.
+  static const _needsReply = {'mlist', 'mthumb', 'mpull', 'notifReply', 'ping'};
 
   /// Bağlantı yolu: arayüzde "Aynı Wi-Fi · doğrudan" ya da "İnternet üzerinden · şifreli"
   bool viaRelay(Peer p) => !p.lanOnline && p.relayOnline;
@@ -317,6 +373,19 @@ class Kopru extends ChangeNotifier {
     await _secure.write(key: 'peers', value: jsonEncode(peers.map((p) => p.toJson()).toList()));
   }
 
+  void _addClip(String text, String from) {
+    final t = text.trim();
+    if (t.isEmpty || looksSecret(t)) return;
+    clipHistory.removeWhere((c) => c.text == t);
+    clipHistory.insert(0, ClipItem(t.length > 5000 ? t.substring(0, 5000) : t, from, DateTime.now()));
+    if (clipHistory.length > 20) clipHistory.removeRange(20, clipHistory.length);
+  }
+
+  void clearClipHistory() {
+    clipHistory.clear();
+    notifyListeners();
+  }
+
   Future<void> _addHistory(HistoryItem h) async {
     history.insert(0, h);
     if (history.length > 200) history.removeRange(200, history.length);
@@ -383,6 +452,8 @@ class Kopru extends ChangeNotifier {
       }
       if (req.method == 'POST' && path == '/v1/pair') return await _handlePair(req);
       if (path.startsWith('/v1/local/')) return await _handleLocal(req, path);
+      if (req.method == 'POST' && path == '/v1/near/offer') return await _handleOffer(req);
+      if (req.method == 'POST' && path == '/v1/near/file') return await _handleNearFile(req);
 
       final peer = peerById(req.headers.value('x-k-from'));
       if (peer == null) {
@@ -525,11 +596,13 @@ class Kopru extends ChangeNotifier {
         if (isPhone) {
           // Bilgisayarın panosu: telefonda "Kopyala" ile alınır
           peer.clip = text;
+          _addClip(text, peer.name);
           peer.clipAt = DateTime.now();
           notifyListeners();
         } else {
           // Telefondan "Panoyu gönder": doğrudan bilgisayarın panosuna
           _lastClipSeen = text;
+          _addClip(text, peer.name);
           await Clipboard.setData(ClipboardData(text: text));
           myClip = text;
           myClipAt = DateTime.now();
@@ -557,8 +630,43 @@ class Kopru extends ChangeNotifier {
         }
         return null;
       case 'media':
-        if (Platform.isWindows) await _mediaKey(m['key']?.toString() ?? '');
+        if (Platform.isWindows && !WinInput.key(m['key']?.toString() ?? '', times: (m['key'] == 'volup' || m['key'] == 'voldown') ? 2 : 1)) {
+          await _mediaKey(m['key']?.toString() ?? '');
+        }
         return null;
+      case 'input':
+        if (Platform.isWindows) await _input(m);
+        return null;
+      case 'power':
+        if (Platform.isWindows) await _power(m['a']?.toString() ?? '');
+        return null;
+      case 'mlist':
+        if (!isPhone) return {'error': 'yok'};
+        if (!browseAllowed) return {'error': 'kapali'};
+        final items = await Native.listMedia(m['kind']?.toString() ?? 'img', (m['offset'] as num?)?.toInt() ?? 0,
+            ((m['limit'] as num?)?.toInt() ?? 60).clamp(1, 120));
+        if (items == null) {
+          await Notifier.show('${peer.name} fotoğraflarına bakmak istiyor',
+              'Pusula Köprü\'yü açıp fotoğraflara erişim izni ver.', always: true);
+          return {'error': 'izin'};
+        }
+        return {'items': items};
+      case 'mthumb':
+        if (!isPhone || !browseAllowed) return {'error': 'kapali'};
+        final b = await Native.thumb(m['id']?.toString() ?? '', ((m['px'] as num?)?.toInt() ?? 200).clamp(64, 400));
+        return b == null ? {'error': 'yok'} : {'data': base64Encode(b)};
+      case 'mpull':
+        if (!isPhone || !browseAllowed) return {'error': 'kapali'};
+        final wanted = ((m['items'] as List?) ?? const []).whereType<Map>().take(200).toList();
+        () async {
+          final paths = <String>[];
+          for (final it in wanted) {
+            final path = await Native.copyMedia(it['id'].toString(), it['name']?.toString() ?? 'dosya');
+            if (path != null) paths.add(path);
+          }
+          if (paths.isNotEmpty) sendFiles(peer, paths, deleteAfter: true);
+        }();
+        return {'ok': true, 'n': wanted.length};
       case 'notif':
         if (!Platform.isWindows) return null;
         final n = PhoneNotif.fromMsg(m, peer.id);
@@ -623,11 +731,31 @@ class Kopru extends ChangeNotifier {
       final id = j['id']?.toString() ?? '';
       if (id.isEmpty || id == myId) return;
       final port = (j['port'] as num?)?.toInt() ?? kPort;
+      final open = j['open']?.toString();
+      if (open != null && open.isNotEmpty) {
+        final v = visible[id];
+        final pub = unb64u(open);
+        if (v == null || !sameBytes(v.pub ?? Uint8List(0), pub)) {
+          visible[id] = NearbyDevice(id, j['n']?.toString() ?? 'Cihaz', j['p']?.toString() ?? '', d.address.address, port,
+              DateTime.now(), pub: pub);
+          notifyListeners();
+        } else {
+          v
+            ..address = d.address.address
+            ..port = port
+            ..seen = DateTime.now();
+        }
+      } else if (visible.remove(id) != null) {
+        notifyListeners();
+      }
       final peer = peerById(id);
       if (peer != null) {
         final wasOnline = peer.lanOnline;
         _seen(peer, d.address.address, port);
-        if (!wasOnline && isPhone) sendStatus(only: peer);
+        if (!wasOnline && isPhone) {
+          sendStatus(only: peer);
+          if (peer.id == backupPeerId || backupPeerId == null) Future.delayed(const Duration(seconds: 5), runBackup);
+        }
         return;
       }
       if (j['pair'] == true) {
@@ -685,6 +813,7 @@ class Kopru extends ChangeNotifier {
       'p': platform,
       'port': port,
       if (pairing) 'pair': true,
+      if (isVisible && _nearPub != null) 'open': b64u(_nearPub!),
     }));
     final targets = <String>{'255.255.255.255'};
     for (final a in await localAddresses()) {
@@ -700,7 +829,14 @@ class Kopru extends ChangeNotifier {
     final now = DateTime.now();
     final before = nearby.length;
     nearby.removeWhere((_, n) => now.difference(n.seen) > const Duration(seconds: 15));
-    if (nearby.length != before) notifyListeners();
+    final vb = visible.length;
+    visible.removeWhere((_, n) => now.difference(n.seen) > const Duration(seconds: 12));
+    if (visibleUntil != null && !isVisible) {
+      visibleUntil = null;
+      _offers.clear();
+      notifyListeners();
+    }
+    if (nearby.length != before || visible.length != vb) notifyListeners();
   }
 
   /// Yayın ulaşmayan ağlarda (misafir Wi-Fi, güvenlik duvarı) bilinen adresleri doğrudan dener.
@@ -939,7 +1075,10 @@ class Kopru extends ChangeNotifier {
 
   // ---------------------------------------------------------------- iletiler
 
-  Future<Map<String, dynamic>?> _send(Peer p, Map<String, dynamic> m) async {
+  Future<Map<String, dynamic>?> _send(Peer p, Map<String, dynamic> m, {Duration replyTimeout = const Duration(seconds: 15)}) async {
+    final wantsReply = _needsReply.contains(m['t']);
+    final rid = wantsReply ? b64u(randomBytes(9)) : null;
+    if (rid != null) m = {...m, 'rid': rid};
     final body = await p.key.sealJson(_stamp(m));
     final tried = <String>{};
     Future<Map<String, dynamic>?> tryAddr(String a) async {
@@ -979,6 +1118,20 @@ class Kopru extends ChangeNotifier {
     if (relayReady) {
       final keepable = const {'text', 'unpair'}.contains(m['t']);
       if (!p.relayOnline && !keepable) return null;
+      if (rid != null) {
+        final c = Completer<Map<String, dynamic>?>();
+        _pendingReplies[rid] = c;
+        if (!link.send(body)) {
+          _pendingReplies.remove(rid);
+          return null;
+        }
+        try {
+          return await c.future.timeout(replyTimeout);
+        } catch (_) {
+          _pendingReplies.remove(rid);
+          return null;
+        }
+      }
       if (link.send(body, keep: keepable)) {
         return {'ok': true, 'relay': true, if (!p.relayOnline) 'queued': true};
       }
@@ -1004,6 +1157,7 @@ class Kopru extends ChangeNotifier {
     if (t.isEmpty) return null;
     final ok = await _send(p, {'t': 'clip', 'text': t.length > 100000 ? t.substring(0, 100000) : t}) != null;
     if (ok) {
+      _addClip(t, 'Bu telefon');
       await _addHistory(HistoryItem(
           kind: looksLikeLink(t) ? 'link' : 'text', name: t, incoming: false, peerName: p.name, at: DateTime.now()));
     }
@@ -1040,6 +1194,87 @@ class Kopru extends ChangeNotifier {
       _send(p, {'t': 'notif', ...m});
     }
   }
+
+  /// Windows: telefondan dokunmatik yüzey ve klavye.
+  Future<void> _input(Map<String, dynamic> m) async {
+    int n(String k) => (m[k] as num?)?.round() ?? 0;
+    switch (m['k']) {
+      case 'move':
+        WinInput.move(n('dx'), n('dy'));
+      case 'click':
+        WinInput.click(right: m['right'] == true, double: m['double'] == true);
+      case 'drag':
+        WinInput.leftButton(m['down'] == true);
+      case 'scroll':
+        WinInput.scroll(n('dx'), n('dy'));
+      case 'key':
+        WinInput.key(m['name']?.toString() ?? '', times: n('times').clamp(1, 20));
+      case 'type':
+        // Yazı: panoya koy, Ctrl+V, eski panoyu geri yükle
+        final text = m['text']?.toString() ?? '';
+        if (text.isEmpty) return;
+        String? old;
+        try {
+          old = (await Clipboard.getData(Clipboard.kTextPlain))?.text;
+        } catch (_) {}
+        _lastClipSeen = text;
+        await Clipboard.setData(ClipboardData(text: text));
+        await Future.delayed(const Duration(milliseconds: 60));
+        WinInput.key('paste');
+        await Future.delayed(const Duration(milliseconds: 250));
+        if (old != null) {
+          _lastClipSeen = old;
+          await Clipboard.setData(ClipboardData(text: old));
+        }
+    }
+  }
+
+  Future<void> _power(String a) async {
+    try {
+      switch (a) {
+        case 'lock':
+          await Process.run('rundll32.exe', ['user32.dll,LockWorkStation']);
+        case 'sleep':
+          await Process.run('rundll32.exe', ['powrprof.dll,SetSuspendState', '0,1,0']);
+        case 'restart':
+          await Process.run('shutdown', ['/r', '/t', '5', '/c', 'Pusula Köprü: telefondan yeniden başlatıldı']);
+        case 'shutdown':
+          await Process.run('shutdown', ['/s', '/t', '5', '/c', 'Pusula Köprü: telefondan kapatıldı']);
+      }
+    } catch (_) {}
+  }
+
+  // Telefon tarafı: kumanda iletileri (hareketler toplanıp ~30 ms'de bir gönderilir)
+  double _mx = 0, _my = 0;
+  Timer? _moveTimer;
+  void mouseMove(Peer p, double dx, double dy) {
+    _mx += dx;
+    _my += dy;
+    _moveTimer ??= Timer(const Duration(milliseconds: 30), () {
+      _moveTimer = null;
+      final x = _mx.round(), y = _my.round();
+      _mx -= x;
+      _my -= y;
+      if (x != 0 || y != 0) _send(p, {'t': 'input', 'k': 'move', 'dx': x, 'dy': y});
+    });
+  }
+
+  double _sx = 0, _sy = 0;
+  Timer? _scrollTimer;
+  void mouseScroll(Peer p, double dx, double dy) {
+    _sx += dx;
+    _sy += dy;
+    _scrollTimer ??= Timer(const Duration(milliseconds: 50), () {
+      _scrollTimer = null;
+      final x = _sx.round(), y = _sy.round();
+      _sx -= x;
+      _sy -= y;
+      if (x != 0 || y != 0) _send(p, {'t': 'input', 'k': 'scroll', 'dx': x, 'dy': y});
+    });
+  }
+
+  Future<bool> input(Peer p, Map<String, dynamic> m) async => await _send(p, {'t': 'input', ...m}) != null;
+  Future<bool> power(Peer p, String a) async => await _send(p, {'t': 'power', 'a': a}) != null;
 
   /// Windows: medya ve ses tuşları (telefondan kumanda).
   Future<void> _mediaKey(String key) async {
@@ -1112,6 +1347,7 @@ class Kopru extends ChangeNotifier {
     }
     myClip = t;
     myClipAt = DateTime.now();
+    _addClip(t, 'Bu bilgisayar');
     notifyListeners();
     if (!clipShare) return;
     final text = t.length > 100000 ? t.substring(0, 100000) : t;
@@ -1124,7 +1360,7 @@ class Kopru extends ChangeNotifier {
 
   /// Dosyaları sırayla gönderir. Toplu gönderimin kimliğini döndürür (gönderim ekranı için).
   /// Klasörler içindeki dosyalarla birlikte gönderilir; karşıda aynı klasör yapısı kurulur.
-  String sendFiles(Peer p, List<String> paths) {
+  String sendFiles(Peer p, List<String> paths, {bool deleteAfter = false}) {
     final batch = b64u(randomBytes(6));
     final items = <(ActiveTransfer, File)>[];
     void add(File f, String dir) {
@@ -1177,10 +1413,307 @@ class Kopru extends ChangeNotifier {
           mime: mimeFor(t.name),
           ok: t.state == 'done',
         ));
+        if (deleteAfter) {
+          try {
+            f.deleteSync();
+          } catch (_) {}
+        }
       }
       _cleanupLater();
     }();
     return batch;
+  }
+
+  // ---------------------------------------------------------------- eşleştirmeden gönderme
+
+  /// "Yakındakilerden al": 10 dakika boyunca aynı Wi-Fi'deki Pusula Köprü'ler bu cihazı görür.
+  Future<void> setVisible(bool on) async {
+    if (on) {
+      _nearKeyPair = await PairCrypto.newKeyPair();
+      _nearPub = await PairCrypto.publicBytes(_nearKeyPair);
+      visibleUntil = DateTime.now().add(const Duration(minutes: 10));
+    } else {
+      visibleUntil = null;
+      _nearKeyPair = null;
+      _nearPub = null;
+      _offers.clear();
+    }
+    _announce();
+    notifyListeners();
+  }
+
+  static Future<String> _sas(PairKey key) async {
+    final mac = await Hmac.sha256().calculateMac(utf8.encode('kopru-yakin-kod'), secretKey: SecretKey(List<int>.from(key.bytes)));
+    final v = ((mac.bytes[0] << 16) | (mac.bytes[1] << 8) | mac.bytes[2]) % 1000000;
+    final c = v.toString().padLeft(6, '0');
+    return '${c.substring(0, 3)} ${c.substring(3)}';
+  }
+
+  Future<void> _handleOffer(HttpRequest req) async {
+    final body = await _readAll(req, 256 * 1024);
+    if (!isVisible || _nearKeyPair == null) return await _reply(req, 403);
+    final j = jsonDecode(utf8.decode(body));
+    if (j is! Map) return await _reply(req, 400);
+    if (_offers.length > 20) return await _reply(req, 429);
+    final senderPub = unb64u(j['pub']?.toString() ?? '');
+    if (senderPub.length != 32) return await _reply(req, 400);
+    final key = PairKey(await PairCrypto.derive(_nearKeyPair, senderPub, utf8.encode('kopru-yakin')));
+    final offer = NearOffer(
+      id: b64u(randomBytes(9)),
+      name: _short((j['n']?.toString() ?? 'Cihaz').trim(), 40),
+      platform: j['p']?.toString() ?? '',
+      files: ((j['files'] as List?) ?? const []).map((e) => e.toString()).take(500).toList(),
+      total: (j['total'] as num?)?.toInt() ?? 0,
+      sas: await _sas(key),
+      key: key,
+      expires: DateTime.now().add(const Duration(minutes: 10)),
+    );
+    _offers[offer.id] = offer;
+    final answer = Completer<bool>();
+    _offerAnswers[offer.id] = answer;
+    _emit(KopruEvent('nearOffer', offer: offer));
+    await Notifier.show('${offer.name} dosya göndermek istiyor',
+        '${offer.files.length} öğe · ${formatSize(offer.total)}. Kabul etmek için Pusula Köprü\'yü aç.',
+        always: true);
+    bool ok;
+    try {
+      ok = await answer.future.timeout(const Duration(seconds: 90));
+    } catch (_) {
+      ok = false;
+    }
+    _offerAnswers.remove(offer.id);
+    if (!ok) _offers.remove(offer.id);
+    offer.accepted = ok;
+    return await _replyJson(req, {'ok': ok, if (ok) 'offer': offer.id});
+  }
+
+  final _offerAnswers = <String, Completer<bool>>{};
+
+  static String _short(String s, int n) => s.length <= n ? s : s.substring(0, n);
+
+  void answerOffer(NearOffer o, bool accept) {
+    _offerAnswers[o.id]?.complete(accept);
+  }
+
+  Future<void> _handleNearFile(HttpRequest req) async {
+    final o = _offers[req.headers.value('x-k-offer') ?? ''];
+    if (o == null || !o.accepted || DateTime.now().isAfter(o.expires)) {
+      await _readAll(req, 1 << 16).catchError((_) => Uint8List(0));
+      return await _reply(req, 403);
+    }
+    final temp = Peer(id: 'yakin:${o.id}', name: o.name, platform: o.platform, key: o.key, addrs: const [], port: 0);
+    final Map<String, dynamic> meta;
+    try {
+      meta = await o.key.openJson(unb64u(req.headers.value('x-k-meta') ?? ''));
+    } catch (_) {
+      return await _reply(req, 403);
+    }
+    if (!_fresh(meta)) return await _reply(req, 409);
+    final ok = await _receiveStream(req, temp, meta);
+    await _reply(req, ok ? 200 : 400);
+  }
+
+  /// Eşleşmemiş yakındaki cihaza gönder. [onSas]: doğrulama kodu (karşı ekranla karşılaştırmak için).
+  /// Dönüş: null başarılı (gönderim başladı, toplu kimlik [batch]'te), aksi hâlde hata iletisi.
+  Future<String?> sendNearby(NearbyDevice d, List<String> paths,
+      {void Function(String sas)? onSas, void Function(String batch)? onStart}) async {
+    final pub = d.pub;
+    if (pub == null) return 'Cihaz artık görünür değil';
+    final files = <File>[];
+    for (final path in paths) {
+      final type = FileSystemEntity.typeSync(path);
+      if (type == FileSystemEntityType.file) files.add(File(path));
+    }
+    if (files.isEmpty) return 'Gönderilecek dosya yok';
+    final kp = await PairCrypto.newKeyPair();
+    final myPub = await PairCrypto.publicBytes(kp);
+    final key = PairKey(await PairCrypto.derive(kp, pub, utf8.encode('kopru-yakin')));
+    onSas?.call(await _sas(key));
+    final total = files.fold<int>(0, (a, f) => a + f.lengthSync());
+    final http.Response r;
+    try {
+      r = await http
+          .post(Uri.http('${d.address}:${d.port}', '/v1/near/offer'),
+              headers: {'content-type': 'application/json'},
+              body: jsonEncode({
+                'n': myName,
+                'p': platform,
+                'pub': b64u(myPub),
+                'files': files.map((f) => f.path.split(RegExp(r'[\\/]')).last).toList(),
+                'total': total,
+              }))
+          .timeout(const Duration(seconds: 100));
+    } catch (_) {
+      return '${d.name} yanıt vermedi';
+    }
+    if (r.statusCode != 200) return '${d.name} şu an almıyor';
+    final j = jsonDecode(utf8.decode(r.bodyBytes));
+    if (j is! Map || j['ok'] != true) return '${d.name} reddetti';
+    final offer = j['offer'].toString();
+    final temp = Peer(id: 'yakin:${d.id}', name: d.name, platform: d.platform, key: key, addrs: [d.address], port: d.port);
+    final batch = b64u(randomBytes(6));
+    final items = <(ActiveTransfer, File)>[];
+    for (final f in files) {
+      final t = ActiveTransfer(
+          id: b64u(randomBytes(9)), name: f.path.split(RegExp(r'[\\/]')).last, size: f.lengthSync(), incoming: false, peerId: temp.id, batch: batch);
+      active.add(t);
+      items.add((t, f));
+    }
+    onStart?.call(batch);
+    notifyListeners();
+    for (final (t, f) in items) {
+      if (t.cancelRequested) {
+        t.state = 'cancelled';
+        continue;
+      }
+      t.state = 'running';
+      final client = HttpClient()..connectionTimeout = const Duration(seconds: 6);
+      try {
+        final req = await client.post(d.address, d.port, '/v1/near/file');
+        t.abort = () {
+          try {
+            req.abort();
+          } catch (_) {}
+        };
+        req.headers.set('x-k-offer', offer);
+        req.headers.set('x-k-meta', b64u(await key.sealJson(await _fileMeta(t))));
+        req.headers.contentType = ContentType.binary;
+        req.bufferOutput = false;
+        await _writeFrames(req, f, t, temp);
+        final res = await req.close().timeout(const Duration(minutes: 2));
+        await res.drain<void>();
+        t.state = res.statusCode == 200 ? 'done' : 'failed';
+      } catch (_) {
+        t.state = t.cancelRequested ? 'cancelled' : 'failed';
+      } finally {
+        client.close(force: true);
+        t.abort = null;
+        notifyListeners();
+      }
+      await _addHistory(HistoryItem(
+          kind: 'file', name: t.name, incoming: false, peerName: d.name, at: DateTime.now(), size: t.size, location: f.path, mime: mimeFor(t.name), ok: t.state == 'done'));
+    }
+    _cleanupLater();
+    return null;
+  }
+
+  // ---------------------------------------------------------------- fotoğraf yedekleme (telefon)
+
+  Future<void> setBackup(bool on, {String? peerId, bool all = false}) async {
+    backupOn = on;
+    if (peerId != null) backupPeerId = peerId;
+    if (on && (all || backupSince == 0)) {
+      backupSince = all ? 0 : DateTime.now().millisecondsSinceEpoch ~/ 1000;
+    }
+    await _prefs.setBool('backupOn', on);
+    await _prefs.setInt('backupSince', backupSince);
+    if (backupPeerId != null) await _prefs.setString('backupPeer', backupPeerId!);
+    notifyListeners();
+    if (on) runBackup();
+  }
+
+  /// Yeni fotoğraf ve videoları, bilgisayar aynı Wi-Fi'deyken sırayla gönderir (mobil veri harcamaz).
+  Future<void> runBackup() async {
+    if (!isPhone || !backupOn || backupRunning) return;
+    final p = peerById(backupPeerId) ?? peers.where((x) => x.isComputer).firstOrNull;
+    if (p == null || !p.lanOnline) return;
+    if (!await Native.mediaPermission()) return;
+    backupRunning = true;
+    notifyListeners();
+    try {
+      for (var round = 0; round < 40; round++) {
+        final items = await Native.newMedia(backupSince, 20);
+        if (items == null || items.isEmpty) break;
+        for (final it in items) {
+          if (!backupOn || !p.lanOnline) return;
+          final name = it['name']?.toString() ?? 'dosya';
+          final date = DateTime.fromMillisecondsSinceEpoch((it['date'] as num?)?.toInt() ?? 0);
+          final path = await Native.copyMedia(it['id'].toString(), name);
+          var ok = path == null; // okunamayan öğeyi atla
+          if (path != null) {
+            final f = File(path);
+            final t = ActiveTransfer(
+              id: b64u(randomBytes(9)),
+              name: name,
+              size: f.lengthSync(),
+              incoming: false,
+              peerId: p.id,
+              batch: 'backup',
+              dir: '${date.year}-${date.month.toString().padLeft(2, '0')}',
+              backup: true,
+            );
+            active.add(t);
+            await _sendFile(p, f, t);
+            ok = t.state == 'done';
+            try {
+              f.deleteSync();
+            } catch (_) {}
+            active.remove(t);
+          }
+          if (!ok) return; // bağlantı koptu: sonra devam
+          backupSince = date.millisecondsSinceEpoch ~/ 1000;
+          if (path != null) backupCount++;
+          backupLast = DateTime.now();
+          await _prefs.setInt('backupSince', backupSince);
+          await _prefs.setInt('backupCount', backupCount);
+          await _prefs.setInt('backupLast', backupLast!.millisecondsSinceEpoch);
+          notifyListeners();
+        }
+      }
+    } finally {
+      backupRunning = false;
+      notifyListeners();
+    }
+  }
+
+  Future<void> setBrowseAllowed(bool v) async {
+    browseAllowed = v;
+    await _prefs.setBool('browseAllowed', v);
+    notifyListeners();
+  }
+
+  /// Bilgisayar: yedeklerin klasörü (Resimler\Pusula Köprü\<telefon>).
+  String backupFolder(Peer p) {
+    final home = Platform.environment['USERPROFILE'] ?? Directory.systemTemp.path;
+    return '$home\\Pictures\\Pusula Köprü\\${_safeName(p.name)}';
+  }
+
+  // ---------------------------------------------------------------- telefonun dosyalarına göz atma (bilgisayar)
+
+  /// (öğeler, hata): hata 'izin' | 'kapali' | 'baglanti'
+  Future<(List<MediaItem>, String?)> phoneMedia(Peer p, String kind, int offset, {int limit = 60}) async {
+    final r = await _send(p, {'t': 'mlist', 'kind': kind, 'offset': offset, 'limit': limit});
+    if (r == null) return (<MediaItem>[], 'baglanti');
+    if (r['error'] != null) return (<MediaItem>[], r['error'].toString());
+    final items = ((r['items'] as List?) ?? const []).whereType<Map>().map((e) => MediaItem.fromJson(Map<String, dynamic>.from(e))).toList();
+    return (items, null);
+  }
+
+  final _thumbs = <String, Uint8List>{};
+  final _thumbWait = <String, Future<Uint8List?>>{};
+  Uint8List? cachedThumb(Peer p, String id) => _thumbs['${p.id}/$id'];
+  Future<Uint8List?> phoneThumb(Peer p, String id) {
+    final key = '${p.id}/$id';
+    final c = _thumbs[key];
+    if (c != null) return Future.value(c);
+    return _thumbWait[key] ??= () async {
+      final r = await _send(p, {'t': 'mthumb', 'id': id, 'px': 220});
+      _thumbWait.remove(key);
+      final d = r?['data'];
+      if (d is! String) return null;
+      final b = base64Decode(d);
+      if (_thumbs.length > 600) _thumbs.clear();
+      _thumbs[key] = b;
+      return b;
+    }();
+  }
+
+  Future<bool> pullFromPhone(Peer p, List<MediaItem> items) async {
+    final r = await _send(p, {
+      't': 'mpull',
+      'items': [for (final i in items) {'id': i.id, 'name': i.name}],
+    });
+    return r?['ok'] == true;
   }
 
   void cancelBatch(String batch) {
@@ -1214,12 +1747,16 @@ class Kopru extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> _fileMeta(ActiveTransfer t) async =>
-      _stamp({'name': t.name, 'size': t.size, 'id': t.id, if (t.dir.isNotEmpty) 'dir': t.dir});
+      _stamp({'name': t.name, 'size': t.size, 'id': t.id, if (t.dir.isNotEmpty) 'dir': t.dir, if (t.backup) 'backup': true});
 
   Future<void> _sendFile(Peer p, File f, ActiveTransfer t) async {
     t.state = 'running';
     notifyListeners();
     final addr = await _reachable(p);
+    if (addr == null && t.backup) {
+      t.state = 'failed'; // yedek yalnız aynı Wi-Fi'de (mobil veri harcamasın)
+      return;
+    }
     if (addr == null) {
       // Aynı ağda değil: sunucu üzerinden (şifreli)
       final link = _relays[p.id];
@@ -1504,6 +2041,32 @@ class Kopru extends ChangeNotifier {
       notifyListeners();
       _cleanupLater();
       return false;
+    }
+
+    final backup = meta['backup'] == true && Platform.isWindows;
+    if (backup) {
+      // Fotoğraf yedeği: Resimler\Pusula Köprü\<telefon>\<yıl-ay>; aynısı varsa yenisini atla
+      String? loc;
+      try {
+        final target = Directory('${backupFolder(peer)}${sub.isEmpty ? '' : '\\$sub'}');
+        if (!target.existsSync()) target.createSync(recursive: true);
+        final same = File('${target.path}\\$name');
+        if (same.existsSync() && same.lengthSync() == size) {
+          part.deleteSync();
+          loc = same.path;
+        } else {
+          final dest = _unique(target, name);
+          await part.rename(dest.path);
+          loc = dest.path;
+          backupReceived[peer.id] = (backupReceived[peer.id] ?? 0) + 1;
+          await _prefs.setString('backupReceived', jsonEncode(backupReceived));
+        }
+      } catch (_) {}
+      t.state = loc != null ? 'done' : 'failed';
+      t.done = size;
+      active.remove(t);
+      notifyListeners();
+      return loc != null;
     }
 
     String? location;

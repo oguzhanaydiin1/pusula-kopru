@@ -13,6 +13,7 @@ import '../core/notifier.dart';
 import '../theme.dart';
 import '../updater.dart';
 import 'desktop.dart' show TransferRow, confirmUnpair;
+import 'extras.dart';
 import 'widgets.dart';
 
 /// Telefon: alt menülü ana kabuk.
@@ -73,6 +74,8 @@ class _MobileShellState extends State<MobileShell> with WidgetsBindingObserver {
         showSnack(context, '${e.peer?.name ?? 'Cihaz'} eşleşmeyi kaldırdı');
       case 'error':
         showSnack(context, e.text ?? 'Bir sorun oldu');
+      case 'nearOffer':
+        if (e.offer != null) showOfferDialog(context, e.offer!);
     }
   }
 
@@ -261,6 +264,13 @@ class _HomeTab extends StatelessWidget {
               const OALogo(size: 22),
               const Spacer(),
               IconButton(
+                tooltip: 'Yakındakiler (eşleştirmeden gönder)',
+                style: IconButton.styleFrom(minimumSize: const Size(44, 44), side: const BorderSide(color: OA.border2)),
+                onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NearbyScreen())),
+                icon: Icon(Icons.wifi_tethering, color: k.isVisible ? OA.amber : OA.text),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
                 tooltip: 'Yeni cihaz eşleştir',
                 style: IconButton.styleFrom(
                   minimumSize: const Size(44, 44),
@@ -295,6 +305,13 @@ class _HomeTab extends StatelessWidget {
           onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const PairScreen())),
           icon: const Icon(Icons.qr_code_scanner),
           label: Text('QR kodu okut', style: oaBody(17, color: OA.amberInk, weight: FontWeight.w600)),
+        ),
+        const SizedBox(height: 12),
+        OutlinedButton.icon(
+          style: OutlinedButton.styleFrom(minimumSize: const Size(0, 50)),
+          onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const NearbyScreen())),
+          icon: const Icon(Icons.wifi_tethering),
+          label: const Text('Eşleştirmeden yakındakine gönder'),
         ),
         const SizedBox(height: 12),
         Text('Bilgisayar sürümü: oalabs.dev', textAlign: TextAlign.center, style: oaBody(13, color: OA.faint)),
@@ -375,6 +392,32 @@ class _HomeTab extends StatelessWidget {
                   icon: Icon(b.$2, color: b.$1 == 'playpause' ? OA.amberInk : OA.text),
                 ),
             ]),
+            const SizedBox(height: 12),
+            Row(children: [
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => TouchpadScreen(peer: p))),
+                  icon: const Icon(Icons.touch_app_outlined, size: 18),
+                  label: const Text('Fare'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => PresentationScreen(peer: p))),
+                  icon: const Icon(Icons.slideshow_outlined, size: 18),
+                  label: const Text('Sunum'),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(
+                child: OutlinedButton.icon(
+                  onPressed: () => showPowerSheet(context, p),
+                  icon: const Icon(Icons.power_settings_new, size: 18),
+                  label: const Text('Güç'),
+                ),
+              ),
+            ]),
           ]),
         ),
       ],
@@ -405,6 +448,17 @@ class _HomeTab extends StatelessWidget {
               ],
             ]),
           ]),
+        ),
+      ],
+      if (k.clipHistory.isNotEmpty) ...[
+        const SizedBox(height: 4),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton.icon(
+            onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ClipHistoryScreen())),
+            icon: const Icon(Icons.history, size: 18),
+            label: Text('Pano geçmişi (${k.clipHistory.length})'),
+          ),
         ),
       ],
       if (inc != null) ...[
@@ -519,6 +573,41 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
     }
   }
 
+  Future<void> _toggleBackup(bool on) async {
+    if (!on) {
+      await k.setBackup(false);
+      return;
+    }
+    final pcs = k.peers.where((p) => p.isComputer).toList();
+    if (pcs.isEmpty) {
+      showSnack(context, 'Önce bir bilgisayarla eşleş');
+      return;
+    }
+    if (!await Native.mediaPermission()) {
+      await Native.requestMedia();
+      if (mounted) showSnack(context, 'Fotoğraf ve video izni verdikten sonra tekrar aç');
+      return;
+    }
+    if (!mounted) return;
+    final all = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Hangi fotoğraflar?', style: oaDisplay(22)),
+        content: Text(
+          'Yedek ${pcs.first.name} bilgisayarına, aynı Wi-Fi\'deyken gider. Telefondaki bütün fotoğraf ve videolar mı, '
+          'yoksa yalnız bundan sonra çektiklerin mi?',
+          style: oaBody(15, color: OA.text2, height: 1.5),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Bundan sonrakiler')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Hepsi')),
+        ],
+      ),
+    );
+    if (all == null) return;
+    await k.setBackup(true, peerId: (k.selected?.isComputer == true ? k.selected! : pcs.first).id, all: all);
+  }
+
   Future<void> _toggleMirror(bool on) async {
     await k.setMirror(on);
     if (on && !(await Native.notificationAccess())) await _explainAccess();
@@ -607,6 +696,28 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
             _toggleMirror,
             warn: _access == false && k.mirror,
             onTapText: _access == false && k.mirror ? _explainAccess : null,
+          ),
+          const SizedBox(height: 16),
+          _switchRow(
+            'Fotoğrafları bilgisayara yedekle',
+            k.backupOn
+                ? (k.backupRunning
+                    ? 'Yedekleniyor…'
+                    : '${k.peerById(k.backupPeerId)?.name ?? 'Bilgisayar'} · ${k.backupCount} öğe'
+                        '${k.backupLast != null ? ' · son: ${timeAgo(k.backupLast!)}' : ''}. Yalnız aynı Wi-Fi\'de, mobil veri harcamaz.')
+                : 'Yeni fotoğraf ve videolar, bilgisayarla aynı Wi-Fi\'deyken Resimler\\Pusula Köprü klasörüne kopyalanır.',
+            k.backupOn,
+            _toggleBackup,
+          ),
+          const SizedBox(height: 16),
+          _switchRow(
+            'Bilgisayar fotoğraflarıma göz atabilsin',
+            'Eşleşmiş bilgisayardan telefonun fotoğraf, video ve İndirilenler\'ine bakıp seçtiklerini alabilirsin.',
+            k.browseAllowed,
+            (v) async {
+              await k.setBrowseAllowed(v);
+              if (v && !await Native.mediaPermission()) await Native.requestMedia();
+            },
           ),
           const SizedBox(height: 16),
           _switchRow(
@@ -1029,6 +1140,28 @@ class SendingScreen extends StatelessWidget {
             );
           },
         ),
+      ),
+    );
+  }
+}
+
+
+class NearbyScreen extends StatelessWidget {
+  const NearbyScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(title: Text('Yakındakiler', style: oaDisplay(20))),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          Text('Eşleştirmeden, aynı Wi-Fi\'deki birine tek seferlik dosya gönder ya da al. '
+              'Karşı taraf her gönderimi onaylar; dosyalar şifreli gider.',
+              style: oaBody(15, color: OA.text2, height: 1.5)),
+          const SizedBox(height: 16),
+          const NearbyPanel(),
+        ],
       ),
     );
   }

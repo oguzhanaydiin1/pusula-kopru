@@ -123,8 +123,10 @@ class ActiveTransfer {
     required this.peerId,
     required this.batch,
     this.dir = '',
+    this.backup = false,
   });
   final String dir; // klasör gönderiminde alt klasör (ör. "Tatil/2024")
+  final bool backup; // fotoğraf yedeği (geçmişe yazılmaz)
 
   final String id;
   final String name;
@@ -166,10 +168,68 @@ String linkUrl(String s) {
 
 /// Ekrandaki olaylar (arayüz bunlara bakıp bilgi gösterir).
 class KopruEvent {
-  KopruEvent(this.type, {this.peer, this.text});
-  final String type; // paired | ring | ringStop | received | text | clipCopied | unpaired | error
+  KopruEvent(this.type, {this.peer, this.text, this.offer});
+  final String type; // paired | ring | ringStop | received | text | clipCopied | unpaired | error | nearOffer | backup
   final Peer? peer;
   final String? text;
+  final NearOffer? offer;
+}
+
+/// Pano geçmişindeki bir öğe.
+class ClipItem {
+  ClipItem(this.text, this.from, this.at);
+  final String text;
+  final String from; // "Bu bilgisayar", "Telefonum"…
+  final DateTime at;
+}
+
+/// Şifre gibi görünen metinler pano geçmişine yazılmaz.
+bool looksSecret(String t) {
+  final s = t.trim();
+  if (s.length < 8 || s.length > 64 || s.contains(RegExp(r'\s'))) return false;
+  if (looksLikeLink(s)) return false;
+  final kinds = [RegExp(r'[a-z]'), RegExp(r'[A-Z]'), RegExp(r'[0-9]'), RegExp(r'[^A-Za-z0-9]')].where((r) => r.hasMatch(s)).length;
+  return kinds >= 3;
+}
+
+/// Eşleşmemiş yakındaki bir cihazdan gelen gönderim teklifi.
+class NearOffer {
+  NearOffer({
+    required this.id,
+    required this.name,
+    required this.platform,
+    required this.files,
+    required this.total,
+    required this.sas,
+    required this.key,
+    required this.expires,
+  });
+  final String id;
+  final String name;
+  final String platform;
+  final List<String> files;
+  final int total;
+  final String sas; // iki ekranda aynı görünmesi gereken doğrulama kodu
+  final PairKey key;
+  final DateTime expires;
+  bool accepted = false;
+}
+
+/// Telefonun medya kütüphanesindeki bir öğe (bilgisayardan göz atarken).
+class MediaItem {
+  MediaItem(this.id, this.name, this.size, this.date, this.mime);
+  final String id;
+  final String name;
+  final int size;
+  final DateTime date;
+  final String? mime;
+  static MediaItem fromJson(Map<String, dynamic> j) => MediaItem(
+        j['id'].toString(),
+        j['name']?.toString() ?? 'dosya',
+        (j['size'] as num?)?.toInt() ?? 0,
+        DateTime.fromMillisecondsSinceEpoch((j['date'] as num?)?.toInt() ?? 0),
+        j['mime']?.toString(),
+      );
 }
 
 String formatSize(int bytes) {

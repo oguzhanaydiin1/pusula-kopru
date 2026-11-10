@@ -1,5 +1,14 @@
 # Sürüm notları
 
+## 0.4.0
+- **Dokunmatik yüzey ve klavye:** Telefon bilgisayarın faresi olur: kaydır, dokun, uzun bas (sağ tık), iki parmakla kaydır, sürükle. Klavyeyle yazdıkların bilgisayarda belirir; Enter, ok tuşları, kopyala/yapıştır düğmeleri.
+- **Sunum kumandası:** Büyük İleri/Geri düğmeleri, sunumu başlat/bitir, siyah ekran, süre. Telefonun ses tuşlarıyla da slayt geçilir.
+- **Güç menüsü:** Telefondan bilgisayarı kilitle, uyut, yeniden başlat ya da kapat.
+- **Pano geçmişi:** Son 20 kopyalanan iki cihazda da; dokunup yeniden kopyala. Şifre gibi görünenler saklanmaz.
+- **Fotoğraf yedekleme:** Telefonda yeni çekilen fotoğraf ve videolar, bilgisayarla aynı Wi-Fi'deyken Resimler\Pusula Köprü klasörüne kendiliğinden kopyalanır. Mobil veri harcamaz; aynısı zaten varsa atlanır.
+- **Telefonun dosyaları:** Bilgisayardan telefonun fotoğraf, video ve İndirilenler'ine küçük resimlerle göz at, seçtiklerini al. Uzaktayken de çalışır.
+- **Yakındakiler:** Eşleştirmeden, aynı Wi-Fi'deki birine tek seferlik dosya gönder ya da al. Alan taraf onaylar; iki ekranda aynı doğrulama kodu görünür, dosyalar şifreli gider.
+
 ## 0.3.3
 - "Telefonu çaldır" düzeltildi: telefon artık 30 saniye boyunca sesli çalar ve titrer (önceden hemen susuyordu).
 - Farklı ağdayken iletiler beklemeden sunucu üzerinden gider (önceden eski Wi-Fi adreslerini denerken yarım dakikaya kadar bekliyordu).

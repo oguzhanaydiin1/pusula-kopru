@@ -8,8 +8,10 @@ import 'package:qr_flutter/qr_flutter.dart';
 
 import '../core/models.dart';
 import '../core/node.dart';
+import '../core/notifier.dart';
 import '../theme.dart';
 import '../updater.dart';
+import 'extras.dart';
 import 'widgets.dart';
 
 /// Bilgisayar ana penceresi (taslaktaki "Bilgisayar — ana pencere").
@@ -65,6 +67,11 @@ class _DesktopHomeState extends State<DesktopHome> {
         showSnack(context, '${e.peer?.name ?? 'Cihaz'} eşleşmeyi kaldırdı');
       case 'error':
         showSnack(context, e.text ?? 'Bir sorun oldu');
+      case 'nearOffer':
+        if (e.offer != null) {
+          Notifier.showWindow?.call();
+          showOfferDialog(context, e.offer!);
+        }
     }
   }
 
@@ -127,6 +134,26 @@ class _DesktopHomeState extends State<DesktopHome> {
       ),
     );
   }
+
+  Future<void> _nearbyDialog() => showDialog(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          title: Text('Yakındakiler', style: oaDisplay(24)),
+          content: SizedBox(
+            width: 480,
+            child: SingleChildScrollView(
+              child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                Text('Eşleştirmeden, aynı Wi-Fi\'deki birine tek seferlik dosya gönder ya da al. '
+                    'Karşı taraf her gönderimi onaylar; dosyalar şifreli gider.',
+                    style: oaBody(15, color: OA.text2, height: 1.5)),
+                const SizedBox(height: 16),
+                const NearbyPanel(),
+              ]),
+            ),
+          ),
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Kapat'))],
+        ),
+      );
 
   Future<void> _pair() async {
     await showDialog(context: context, barrierDismissible: false, builder: (_) => const PairDialog());
@@ -247,6 +274,12 @@ class _DesktopHomeState extends State<DesktopHome> {
               icon: const Icon(Icons.qr_code_2),
               label: Text('QR kodu göster', style: oaBody(17, color: OA.amberInk, weight: FontWeight.w600)),
             ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: _nearbyDialog,
+              icon: const Icon(Icons.wifi_tethering),
+              label: const Text('Eşleştirmeden yakındakine gönder ya da al'),
+            ),
           ]),
         ),
       ),
@@ -266,6 +299,13 @@ class _DesktopHomeState extends State<DesktopHome> {
         onPressed: _pair,
         icon: const Icon(Icons.add, size: 20),
         label: const Text('Yeni cihaz eşleştir'),
+      ),
+      const SizedBox(height: 10),
+      OutlinedButton.icon(
+        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 50), foregroundColor: k.isVisible ? OA.amber : OA.text2),
+        onPressed: _nearbyDialog,
+        icon: const Icon(Icons.wifi_tethering, size: 20),
+        label: Text(k.isVisible ? 'Yakındakilere görünürsün' : 'Yakındakiler'),
       ),
     ]);
   }
@@ -318,6 +358,26 @@ class _DesktopHomeState extends State<DesktopHome> {
             icon: const Icon(Icons.notifications_active_outlined, size: 18),
             label: const Text('Telefonu çaldır'),
           ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => showDialog(context: context, builder: (_) => PhoneFilesDialog(peer: p)),
+            icon: const Icon(Icons.photo_library_outlined, size: 18),
+            label: const Text('Telefonun dosyaları'),
+          ),
+          if ((k.backupReceived[p.id] ?? 0) > 0) ...[
+            const SizedBox(height: 10),
+            InkWell(
+              onTap: () => openFolder(k.backupFolder(p)),
+              child: Row(children: [
+                const Icon(Icons.backup_outlined, size: 16, color: OA.green),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('Fotoğraf yedeği: ${k.backupReceived[p.id]} öğe · klasörü aç',
+                      style: oaBody(13, color: OA.text2)),
+                ),
+              ]),
+            ),
+          ],
         ],
       ]),
     );
@@ -489,10 +549,12 @@ class _DesktopHomeState extends State<DesktopHome> {
           style: oaBody(15, color: OA.muted),
         ),
         const SizedBox(height: 14),
-        if (k.myClip != null)
-          TextPreview(label: 'Son kopyalanan · ${timeAgo(k.myClipAt!)}', text: k.myClip!, maxLines: 2)
-        else
-          Text('Bir şey kopyaladığında burada görünür.', style: oaBody(14, color: OA.faint)),
+        if (k.clipHistory.isEmpty)
+          Text('Bir şey kopyaladığında burada görünür.', style: oaBody(14, color: OA.faint))
+        else ...[
+          Text('Geçmiş · tıkla, yeniden kopyala', style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
+          const ClipHistoryList(max: 5),
+        ],
       ]),
     );
   }

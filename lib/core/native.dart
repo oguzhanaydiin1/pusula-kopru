@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/services.dart';
 
@@ -11,6 +12,7 @@ class Native {
   static void Function()? onRingStopped;
   static void Function(Map<String, dynamic>)? onNotification; // bildirim aynası (0.3)
   static void Function(String key)? onNotificationRemoved;
+  static void Function(String dir)? onVolumeKey;
 
   static void init() {
     if (!Platform.isAndroid) return;
@@ -22,6 +24,8 @@ class Native {
           onRingStopped?.call();
         case 'notification':
           if (call.arguments is Map) onNotification?.call(Map<String, dynamic>.from(call.arguments as Map));
+        case 'volumeKey':
+          onVolumeKey?.call(call.arguments?.toString() ?? '');
         case 'notificationRemoved':
           onNotificationRemoved?.call(call.arguments?.toString() ?? '');
       }
@@ -84,6 +88,26 @@ class Native {
     final v = await _call<Map>('latestScreenshot');
     return v == null ? null : Map<String, dynamic>.from(v);
   }
+
+  // Medya: göz atma ve yedekleme
+  static Future<bool> mediaPermission() async => await _call<bool>('mediaPermission') ?? false;
+  static Future<bool> requestMedia() async => await _call<bool>('requestMedia') ?? false;
+
+  static List<Map<String, dynamic>>? _list(Object? v) =>
+      v is List ? v.whereType<Map>().map((e) => Map<String, dynamic>.from(e)).toList() : null;
+
+  /// kind: img | vid | dl. İzin yoksa null.
+  static Future<List<Map<String, dynamic>>?> listMedia(String kind, int offset, int limit) async =>
+      _list(await _call<Object>('listMedia', {'kind': kind, 'offset': offset, 'limit': limit}));
+
+  static Future<List<Map<String, dynamic>>?> newMedia(int sinceSeconds, int limit) async =>
+      _list(await _call<Object>('newMedia', {'since': sinceSeconds, 'limit': limit}));
+
+  static Future<Uint8List?> thumb(String id, int px) => _call<Uint8List>('thumb', {'id': id, 'px': px});
+
+  static Future<String?> copyMedia(String id, String name) => _call<String>('copyMedia', {'id': id, 'name': name});
+
+  static Future<void> captureVolume(bool on) => _call('captureVolume', {'on': on});
 
   // Bildirim aynası (0.3)
   /// Bu APK'da bildirim aynası var mı (standart APK'da yok; bkz. android_ayarla.py)

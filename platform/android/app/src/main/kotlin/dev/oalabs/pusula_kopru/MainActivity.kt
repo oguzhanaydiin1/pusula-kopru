@@ -20,6 +20,15 @@ class MainActivity : FlutterActivity() {
 
     override fun getCachedEngineId(): String = KopruEngine.ID
 
+    // Sunum kumandası açıkken ses tuşları slayt geçer
+    override fun onKeyDown(keyCode: Int, event: android.view.KeyEvent?): Boolean {
+        if (NativeBridge.captureVolume && (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP || keyCode == android.view.KeyEvent.KEYCODE_VOLUME_DOWN)) {
+            NativeBridge.emit("volumeKey", if (keyCode == android.view.KeyEvent.KEYCODE_VOLUME_UP) "up" else "down")
+            return true
+        }
+        return super.onKeyDown(keyCode, event)
+    }
+
     override fun shouldDestroyEngineWithHost(): Boolean = false
 
     override fun onResume() {

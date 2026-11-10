@@ -117,6 +117,30 @@ object NativeBridge {
                 }
                 "isForeground" -> result.success(activityRef?.get() != null)
                 "notificationAccess" -> result.success(NotifListener.hasAccess(app))
+                "mediaPermission" -> result.success(MediaAccess.hasPermission(app))
+                "requestMedia" -> { MediaAccess.request(activityRef?.get()); result.success(activityRef?.get() != null) }
+                "listMedia" -> {
+                    val kind = call.argument<String>("kind") ?: "img"
+                    val offset = call.argument<Int>("offset") ?: 0
+                    val limit = call.argument<Int>("limit") ?: 60
+                    bg(result) { if (MediaAccess.hasPermission(app)) MediaAccess.list(app, kind, offset, limit) else null }
+                }
+                "newMedia" -> {
+                    val since = (call.argument<Number>("since") ?: 0).toLong()
+                    val limit = call.argument<Int>("limit") ?: 50
+                    bg(result) { if (MediaAccess.hasPermission(app)) MediaAccess.newSince(app, since, limit) else null }
+                }
+                "thumb" -> {
+                    val id = call.argument<String>("id") ?: ""
+                    val px = call.argument<Int>("px") ?: 200
+                    bg(result) { MediaAccess.thumb(app, id, px) }
+                }
+                "copyMedia" -> {
+                    val id = call.argument<String>("id") ?: ""
+                    val name = call.argument<String>("name") ?: "dosya"
+                    bg(result) { MediaAccess.copy(app, id, name) }
+                }
+                "captureVolume" -> { captureVolume = call.argument<Boolean>("on") == true; result.success(true) }
                 "mirrorAvailable" -> result.success(
                     try {
                         app.packageManager.getServiceInfo(android.content.ComponentName(app, NotifListener::class.java), 0)
@@ -145,6 +169,16 @@ object NativeBridge {
     }
 
     fun isDartReady(): Boolean = dartReady
+
+    /** Sunum kumandasında ses tuşları slayt geçsin */
+    var captureVolume = false
+
+    private fun bg(result: MethodChannel.Result, work: () -> Any?) {
+        Thread {
+            val r = try { work() } catch (_: Exception) { null }
+            main.post { result.success(r) }
+        }.start()
+    }
 
     fun setActivity(a: Activity?) {
         activityRef = if (a == null) null else WeakReference(a)
