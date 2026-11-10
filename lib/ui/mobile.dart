@@ -97,7 +97,6 @@ class _MobileShellState extends State<MobileShell> with WidgetsBindingObserver {
       ),
     );
     _ringOpen = false;
-    Native.stopRing();
   }
 
   Future<void> _onShared(Map<String, dynamic> s) async {

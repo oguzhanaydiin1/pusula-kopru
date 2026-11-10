@@ -1,5 +1,9 @@
 # Sürüm notları
 
+## 0.3.3
+- "Telefonu çaldır" düzeltildi: telefon artık 30 saniye boyunca sesli çalar ve titrer (önceden hemen susuyordu).
+- Farklı ağdayken iletiler beklemeden sunucu üzerinden gider (önceden eski Wi-Fi adreslerini denerken yarım dakikaya kadar bekliyordu).
+
 ## 0.3.2
 - Android: Google Play Protect'in kurulumu engellemesi düzeltildi. Play Protect, Play Store dışından kurulan ve bildirim erişimi isteyen uygulamaları engellediği için bildirim aynası standart sürümden çıkarıldı; diğer bütün özellikler duruyor.
 

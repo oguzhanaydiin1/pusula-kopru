@@ -958,20 +958,25 @@ class Kopru extends ChangeNotifier {
       }
     }
 
-    for (final a in List<String>.from(p.addrs)) {
-      final r = await tryAddr(a);
+    final link = _relays[p.id];
+    final relayReady = relayOn && link != null && link.connected;
+    if (p.lanOnline && p.addrs.isNotEmpty) {
+      // Aynı ağda görülüyor: doğrudan
+      final r = await tryAddr(p.addrs.first);
       if (r != null) return r;
-      if (p.lanOnline) break; // biliniyor ama yanıt vermedi
     }
-    final a = await _reachable(p);
-    if (a != null && !tried.contains(a)) {
-      final r = await tryAddr(a);
-      if (r != null) return r;
+    if (!(relayReady && p.relayOnline)) {
+      // Sunucuda görünmüyor: bilinen yerel adresleri hızlıca (aynı anda) dene
+      final a = await _firstReachable(p.addrs.where((x) => !tried.contains(x)).toList(), p.port,
+          const Duration(milliseconds: 1500), expectId: p.id);
+      if (a != null) {
+        final r = await tryAddr(a);
+        if (r != null) return r;
+      }
     }
     // Aynı ağda değil: sunucu üzerinden (şifreli). Metin gibi kalıcı şeyler karşı taraf çevrim dışıysa
     // sunucuda bekler; çaldırma, kumanda gibi anlık işler beklemez.
-    final link = _relays[p.id];
-    if (relayOn && link != null && link.connected) {
+    if (relayReady) {
       final keepable = const {'text', 'unpair'}.contains(m['t']);
       if (!p.relayOnline && !keepable) return null;
       if (link.send(body, keep: keepable)) {

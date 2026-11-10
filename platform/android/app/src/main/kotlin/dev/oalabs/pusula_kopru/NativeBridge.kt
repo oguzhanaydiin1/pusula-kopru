@@ -396,7 +396,7 @@ object NativeBridge {
     // ---- Telefonu çaldır: sessizdeyken de alarm sesiyle çalar ----
 
     private fun ring(from: String) {
-        stopRing()
+        stopRing(notifyDart = false) // önceki çalma varsa sessizce kapat
         try {
             val am = app.getSystemService(Context.AUDIO_SERVICE) as AudioManager
             savedAlarmVolume = am.getStreamVolume(AudioManager.STREAM_ALARM)
@@ -405,7 +405,8 @@ object NativeBridge {
         }
         val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
             ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
-        ringtone = RingtoneManager.getRingtone(app, uri)?.apply {
+        ringtone = (RingtoneManager.getRingtone(app, uri)
+            ?: RingtoneManager.getRingtone(app, RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)))?.apply {
             audioAttributes = AudioAttributes.Builder()
                 .setUsage(AudioAttributes.USAGE_ALARM)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
@@ -417,8 +418,9 @@ object NativeBridge {
             @Suppress("DEPRECATION")
             val v = app.getSystemService(Context.VIBRATOR_SERVICE) as Vibrator
             val pattern = longArrayOf(0, 600, 400, 600, 400, 600, 400, 600)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) v.vibrate(VibrationEffect.createWaveform(pattern, -1))
-            else @Suppress("DEPRECATION") v.vibrate(pattern, -1)
+            // 0: deseni durdurulana kadar tekrarla
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) v.vibrate(VibrationEffect.createWaveform(pattern, 0))
+            else @Suppress("DEPRECATION") v.vibrate(pattern, 0)
         } catch (_: Exception) {
         }
         // Ekran kapalıyken de durdurulabilsin: "Durdur" düğmeli bildirim
@@ -443,7 +445,9 @@ object NativeBridge {
         main.postDelayed(stopRingTask, 30_000) // en fazla 30 saniye
     }
 
-    fun stopRing() {
+    /** [notifyDart]: ekrandaki "Telefonun burada" penceresi de kapansın (Durdur'a basılınca, süre dolunca). */
+    fun stopRing(notifyDart: Boolean = true) {
+        val wasRinging = ringtone != null
         main.removeCallbacks(stopRingTask)
         try { ringtone?.stop() } catch (_: Exception) {}
         ringtone = null
@@ -464,7 +468,7 @@ object NativeBridge {
             (app.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager).cancel(RING_NOTIF)
         } catch (_: Exception) {
         }
-        main.post { channel?.invokeMethod("ringStopped", null) }
+        if (notifyDart && wasRinging) main.post { channel?.invokeMethod("ringStopped", null) }
     }
 
     /** Bildirim aynası ve diğer olaylar için Dart'a ileti. */
