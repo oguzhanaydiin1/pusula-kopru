@@ -1,7 +1,11 @@
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
+
+/// Bulunan yeni sürüm: üst çubuktaki "Güncelle" düğmesi ve Ayarlar bunu izler.
+final updateAvailable = ValueNotifier<UpdateInfo?>(null);
 
 /// Derlenirken verilen sürüm (CI: --dart-define=APP_VERSION=0.1.0).
 const appVersion = String.fromEnvironment('APP_VERSION', defaultValue: '0.0.0');
@@ -38,7 +42,7 @@ class Updater {
         'Accept': 'application/vnd.github+json',
         'User-Agent': 'PusulaKopru/$appVersion',
       }).timeout(const Duration(seconds: 10));
-      if (r.statusCode != 200) return null;
+      if (r.statusCode != 200) return updateAvailable.value;
       final list = jsonDecode(utf8.decode(r.bodyBytes)) as List;
       final wanted = Platform.isAndroid ? 'Pusula-Kopru-Android.apk' : 'Pusula-Kopru-Kurulum.exe';
       for (final rel in list.whereType<Map>()) {
@@ -47,8 +51,10 @@ class Updater {
         if (!isNewer(tag, appVersion)) return null;
         for (final a in (rel['assets'] as List? ?? const []).whereType<Map>()) {
           if (a['name'] == wanted) {
-            return UpdateInfo(tag.replaceFirst(RegExp(r'^v'), ''), a['browser_download_url'].toString(), wanted,
+            final u = UpdateInfo(tag.replaceFirst(RegExp(r'^v'), ''), a['browser_download_url'].toString(), wanted,
                 rel['html_url']?.toString() ?? '');
+            updateAvailable.value = u;
+            return u;
           }
         }
       }

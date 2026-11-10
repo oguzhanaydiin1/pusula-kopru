@@ -24,20 +24,28 @@ class _DesktopHomeState extends State<DesktopHome> {
   final k = Kopru.i;
   StreamSubscription<KopruEvent>? _sub;
   bool _dragging = false;
-  UpdateInfo? _update;
+  UpdateInfo? get _update => updateAvailable.value;
   double? _updateProgress;
+  Timer? _updateTimer;
 
   @override
   void initState() {
     super.initState();
     _sub = k.events.listen(_onEvent);
-    Updater.check().then((u) {
-      if (mounted && u != null) setState(() => _update = u);
-    });
+    updateAvailable.addListener(_onUpdate);
+    Updater.check();
+    // Uygulama günlerce açık kalabilir: 6 saatte bir yeni sürüme bak
+    _updateTimer = Timer.periodic(const Duration(hours: 6), (_) => Updater.check());
+  }
+
+  void _onUpdate() {
+    if (mounted) setState(() {});
   }
 
   @override
   void dispose() {
+    updateAvailable.removeListener(_onUpdate);
+    _updateTimer?.cancel();
     _sub?.cancel();
     super.dispose();
   }
@@ -857,7 +865,13 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 onPressed: () async {
                   setState(() => _updateText = 'Denetleniyor…');
                   final u = await Updater.check();
-                  if (mounted) setState(() => _updateText = u == null ? 'Güncel' : 'Yeni sürüm: ${u.version} (üst çubuktan güncelle)');
+                  if (!mounted) return;
+                  if (u == null) {
+                    setState(() => _updateText = 'Güncel');
+                  } else {
+                    showSnack(context, 'Yeni sürüm ${u.version} hazır: üst çubuktaki "Güncelle"ye bas');
+                    Navigator.pop(context); // üst çubukta "Güncelle" düğmesi belirdi
+                  }
                 },
                 child: Text(_updateText ?? 'Güncellemeleri denetle'),
               ),

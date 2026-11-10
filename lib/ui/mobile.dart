@@ -38,6 +38,7 @@ class _MobileShellState extends State<MobileShell> with WidgetsBindingObserver {
     Native.onRingStopped = () {
       if (_ringOpen && mounted) Navigator.of(context, rootNavigator: true).pop();
     };
+    Updater.check();
     Native.initialShare().then((s) {
       if (s != null) _onShared(s);
     });
@@ -484,7 +485,8 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
   final k = Kopru.i;
   late final _name = TextEditingController(text: k.myName);
   String? _updateText;
-  UpdateInfo? _update;
+  UpdateInfo? get _update => updateAvailable.value;
+  set _update(UpdateInfo? v) => updateAvailable.value = v;
   bool? _access;
 
   @override

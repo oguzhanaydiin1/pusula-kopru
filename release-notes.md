@@ -1,5 +1,8 @@
 # Sürüm notları
 
+## 0.3.1
+- Bilgisayarda "Güncelle" düğmesi, uygulama uzun süre açık kalsa da yeni sürüm çıkınca belirir (6 saatte bir bakar; Ayarlar'dan denetleyince de hemen çıkar).
+
 ## 0.3.0
 - **Farklı ağdayken de çalışır:** Telefon mobil verideyken ya da başka bir Wi-Fi'deyken dosya, bağlantı, pano, bildirim ve "Telefonu çaldır" OA sunucusu üzerinden gider. Her şey cihazlarda uçtan uca şifrelenir; sunucu içeriği göremez. Dosya başına en fazla 100 MB.
 - Karşı cihaz kapalıyken gönderilen metin ve bağlantılar, açılınca iletilir (3 güne kadar).
