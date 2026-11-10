@@ -1,5 +1,11 @@
 # Sürüm notları
 
+## 0.3.0
+- **Farklı ağdayken de çalışır:** Telefon mobil verideyken ya da başka bir Wi-Fi'deyken dosya, bağlantı, pano, bildirim ve "Telefonu çaldır" OA sunucusu üzerinden gider. Her şey cihazlarda uçtan uca şifrelenir; sunucu içeriği göremez. Dosya başına en fazla 100 MB.
+- Karşı cihaz kapalıyken gönderilen metin ve bağlantılar, açılınca iletilir (3 güne kadar).
+- Ekranda bağlantı yolu görünür: "Aynı Wi-Fi · doğrudan" ya da "İnternet üzerinden".
+- Ayarlar'da "Farklı ağdayken de bağlan" ile kapatılabilir.
+
 ## 0.2.1
 - Pusula Browser'daki "Bilgisayara gönder" Köprü ekranını açmadan çalışır.
 

@@ -28,7 +28,13 @@ class Peer {
   bool get isPhone => platform == 'android';
   bool get isComputer => platform == 'windows';
 
-  bool get online => lastSeen != null && DateTime.now().difference(lastSeen!) < const Duration(seconds: 20);
+  /// Aynı ağda, doğrudan bağlı
+  bool get lanOnline => lastSeen != null && DateTime.now().difference(lastSeen!) < const Duration(seconds: 20);
+
+  /// Sunucu üzerinden bağlı (farklı ağda)
+  bool relayOnline = false;
+
+  bool get online => lanOnline || relayOnline;
 
   Map<String, dynamic> toJson() => {
         'id': id,
@@ -127,6 +133,7 @@ class ActiveTransfer {
   final String peerId;
   final String batch; // aynı anda gönderilen dosyalar
   int done = 0;
+  bool viaRelay = false; // sunucu üzerinden
   String state = 'waiting'; // waiting | running | done | failed | cancelled
   double speed = 0; // bayt/sn
   void Function()? abort;

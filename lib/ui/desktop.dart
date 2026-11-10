@@ -55,6 +55,8 @@ class _DesktopHomeState extends State<DesktopHome> {
         showSnack(context, '${e.text} geldi · İndirilenler\\Pusula Köprü');
       case 'unpaired':
         showSnack(context, '${e.peer?.name ?? 'Cihaz'} eşleşmeyi kaldırdı');
+      case 'error':
+        showSnack(context, e.text ?? 'Bir sorun oldu');
     }
   }
 
@@ -88,7 +90,9 @@ class _DesktopHomeState extends State<DesktopHome> {
     final text = await showDialog<String>(context: context, builder: (_) => const _SendTextDialog());
     if (text == null || text.trim().isEmpty) return;
     final ok = await k.sendText(p, text);
-    if (mounted) showSnack(context, ok ? 'Gönderildi' : '${p.name} bağlı değil');
+    if (mounted) {
+      showSnack(context, ok ? (p.online ? 'Gönderildi' : 'Gönderildi; ${p.name} bağlanınca iletilecek') : '${p.name} bağlı değil');
+    }
   }
 
   Future<void> _ring(Peer p) async {
@@ -196,7 +200,9 @@ class _DesktopHomeState extends State<DesktopHome> {
         ],
         if (sel != null)
           OAChip(
-            label: online ? 'Aynı Wi-Fi · doğrudan bağlantı' : '${sel.name} bağlı değil',
+            label: online
+                ? (k.viaRelay(sel) ? 'İnternet üzerinden · şifreli' : 'Aynı Wi-Fi · doğrudan bağlantı')
+                : '${sel.name} bağlı değil',
             dot: online ? OA.green : OA.faint,
           ),
         const SizedBox(width: 12),
@@ -351,7 +357,10 @@ class _DesktopHomeState extends State<DesktopHome> {
             Text(sel.isPhone ? 'Telefona göndermek için buraya bırak' : '${sel.name} cihazına göndermek için buraya bırak',
                 textAlign: TextAlign.center, style: oaDisplay(30)),
             const SizedBox(height: 10),
-            Text('Dosya, fotoğraf ya da klasör. Aynı Wi-Fi\'deyken doğrudan ve şifreli gider.',
+            Text(
+                k.viaRelay(sel)
+                    ? 'Farklı ağdasınız: internet üzerinden, uçtan uca şifreli gider (dosya başına en fazla 100 MB).'
+                    : 'Dosya, fotoğraf ya da klasör. Aynı Wi-Fi\'deyken doğrudan ve şifreli gider.',
                 textAlign: TextAlign.center, style: oaBody(17, color: OA.text2)),
             const SizedBox(height: 20),
             Wrap(alignment: WrapAlignment.center, spacing: 12, runSpacing: 12, children: [
@@ -810,6 +819,17 @@ class _SettingsDialogState extends State<SettingsDialog> {
               Expanded(child: Text('Panoyu telefonla paylaş', style: oaBody(15, weight: FontWeight.w600))),
               Switch(value: k.clipShare, onChanged: k.setClipShare),
             ]),
+            Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Farklı ağdayken de bağlan', style: oaBody(15, weight: FontWeight.w600)),
+                  Text('Telefon başka bir ağdayken (mobil veri, iş yeri) OA sunucusu üzerinden, uçtan uca şifreli.',
+                      style: oaBody(13, color: OA.muted)),
+                ]),
+              ),
+              Switch(value: k.relayOn, onChanged: k.setRelay),
+            ]),
+            const SizedBox(height: 16),
             Row(children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [

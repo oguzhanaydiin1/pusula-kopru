@@ -16,6 +16,7 @@ import 'crypto.dart';
 import 'models.dart';
 import 'native.dart';
 import 'notifier.dart';
+import 'relay.dart';
 
 /// Pusula Köprü'nün çekirdeği.
 ///
@@ -73,6 +74,8 @@ class Kopru extends ChangeNotifier {
   bool background = true; // Android: arka planda çalış
   bool autostart = true; // Windows: Windows açılınca başla
   bool mirror = false; // Android: bildirimleri bilgisayara ilet
+  bool relayOn = true; // farklı ağdayken sunucu üzerinden bağlan
+  final _relays = <String, RelayLink>{};
   final phoneNotifs = <PhoneNotif>[]; // Windows: telefondan gelen bildirimler
   String? myClip; // bilgisayarda son kopyalanan
   DateTime? myClipAt;
@@ -126,6 +129,7 @@ class Kopru extends ChangeNotifier {
     background = _prefs.getBool('background') ?? true;
     autostart = _prefs.getBool('autostart') ?? true;
     mirror = _prefs.getBool('mirror') ?? false;
+    relayOn = _prefs.getBool('relay') ?? true;
     _selectedId = _prefs.getString('selected');
     myName = _prefs.getString('name') ?? '';
     if (myName.isEmpty) myName = await _defaultName();
@@ -180,8 +184,64 @@ class Kopru extends ChangeNotifier {
     }
     _announce();
     Future.delayed(const Duration(milliseconds: 600), _probeOffline);
+    _ensureRelays();
     notifyListeners();
   }
+
+  // ---------------------------------------------------------------- sunucu üzerinden
+
+  Future<void> setRelay(bool v) async {
+    relayOn = v;
+    await _prefs.setBool('relay', v);
+    if (v) {
+      _ensureRelays();
+    } else {
+      for (final l in _relays.values) {
+        await l.close();
+      }
+      _relays.clear();
+    }
+    notifyListeners();
+  }
+
+  Future<void> _ensureRelays() async {
+    if (!relayOn) return;
+    for (final p in peers) {
+      if (_relays.containsKey(p.id)) continue;
+      final box = await relayBox(p.key);
+      if (_relays.containsKey(p.id) || !peers.contains(p)) continue;
+      final link = RelayLink(
+        peer: p,
+        box: box,
+        myId: myId,
+        onMessage: (sealed) => _onRelayed(p, sealed),
+        onChange: notifyListeners,
+      );
+      _relays[p.id] = link;
+      link.start();
+    }
+  }
+
+  Future<void> _dropRelay(String id) async {
+    await _relays.remove(id)?.close();
+  }
+
+  Future<void> _onRelayed(Peer p, Uint8List sealed) async {
+    try {
+      final m = await p.key.openJson(sealed);
+      if (!_fresh(m)) return;
+      p.relayOnline = true;
+      final t = m['t']?.toString();
+      if (t == 'rfile') {
+        _receiveRelayed(p, m);
+        return;
+      }
+      await _onMessage(p, m);
+    } catch (_) {}
+  }
+
+  /// Bağlantı yolu: arayüzde "Aynı Wi-Fi · doğrudan" ya da "İnternet üzerinden · şifreli"
+  bool viaRelay(Peer p) => !p.lanOnline && p.relayOnline;
 
   Future<String> _defaultName() async {
     if (Platform.isAndroid) return await Native.deviceName() ?? 'Android telefon';
@@ -522,6 +582,7 @@ class Kopru extends ChangeNotifier {
         }
         return null;
       case 'unpair':
+        _dropRelay(peer.id);
         peers.removeWhere((p) => p.id == peer.id);
         await _savePeers();
         _emit(KopruEvent('unpaired', peer: peer));
@@ -564,7 +625,7 @@ class Kopru extends ChangeNotifier {
       final port = (j['port'] as num?)?.toInt() ?? kPort;
       final peer = peerById(id);
       if (peer != null) {
-        final wasOnline = peer.online;
+        final wasOnline = peer.lanOnline;
         _seen(peer, d.address.address, port);
         if (!wasOnline && isPhone) sendStatus(only: peer);
         return;
@@ -645,7 +706,7 @@ class Kopru extends ChangeNotifier {
   /// Yayın ulaşmayan ağlarda (misafir Wi-Fi, güvenlik duvarı) bilinen adresleri doğrudan dener.
   Future<void> _probeOffline() async {
     for (final p in peers) {
-      if (p.online) continue;
+      if (p.lanOnline) continue;
       final addr = await _reachable(p, timeout: const Duration(milliseconds: 1500));
       if (addr != null) {
         _seen(p, addr, null);
@@ -684,7 +745,7 @@ class Kopru extends ChangeNotifier {
   }
 
   Future<String?> _reachable(Peer p, {Duration timeout = const Duration(seconds: 3)}) async {
-    if (p.online && p.addrs.isNotEmpty) return p.addrs.first;
+    if (p.lanOnline && p.addrs.isNotEmpty) return p.addrs.first;
     return _firstReachable(p.addrs, p.port, timeout, expectId: p.id);
   }
 
@@ -748,6 +809,7 @@ class Kopru extends ChangeNotifier {
     }
     final key = await PairCrypto.derive(s.keyPair, clientPub, auth);
     final id = j['id'].toString();
+    await _dropRelay(id);
     peers.removeWhere((p) => p.id == id);
     final peer = Peer(
       id: id,
@@ -766,6 +828,7 @@ class Kopru extends ChangeNotifier {
     await _replyJson(req, {'id': myId, 'n': myName, 'p': platform, 'port': port, 'proof': b64u(reply)});
     _announce();
     _emit(KopruEvent('paired', peer: peer));
+    _ensureRelays();
     notifyListeners();
   }
 
@@ -838,6 +901,7 @@ class Kopru extends ChangeNotifier {
     }
     final key = await PairCrypto.derive(kp, serverPub, auth);
     final id = j['id'].toString();
+    await _dropRelay(id);
     peers.removeWhere((p) => p.id == id);
     final peer = Peer(
       id: id,
@@ -853,6 +917,7 @@ class Kopru extends ChangeNotifier {
     await _savePeers();
     nearby.remove(id);
     _emit(KopruEvent('paired', peer: peer));
+    _ensureRelays();
     notifyListeners();
     if (isPhone) {
       sendStatus(only: peer);
@@ -866,6 +931,7 @@ class Kopru extends ChangeNotifier {
     await _send(p, {'t': 'unpair'});
     peers.removeWhere((x) => x.id == p.id);
     phoneNotifs.removeWhere((n) => n.peerId == p.id);
+    await _dropRelay(p.id);
     await _savePeers();
     if (peers.isEmpty) Native.setBackground(false);
     notifyListeners();
@@ -895,10 +961,23 @@ class Kopru extends ChangeNotifier {
     for (final a in List<String>.from(p.addrs)) {
       final r = await tryAddr(a);
       if (r != null) return r;
-      if (p.online) break; // biliniyor ama yanıt vermedi
+      if (p.lanOnline) break; // biliniyor ama yanıt vermedi
     }
     final a = await _reachable(p);
-    if (a != null && !tried.contains(a)) return tryAddr(a);
+    if (a != null && !tried.contains(a)) {
+      final r = await tryAddr(a);
+      if (r != null) return r;
+    }
+    // Aynı ağda değil: sunucu üzerinden (şifreli). Metin gibi kalıcı şeyler karşı taraf çevrim dışıysa
+    // sunucuda bekler; çaldırma, kumanda gibi anlık işler beklemez.
+    final link = _relays[p.id];
+    if (relayOn && link != null && link.connected) {
+      final keepable = const {'text', 'unpair'}.contains(m['t']);
+      if (!p.relayOnline && !keepable) return null;
+      if (link.send(body, keep: keepable)) {
+        return {'ok': true, 'relay': true, if (!p.relayOnline) 'queued': true};
+      }
+    }
     return null;
   }
 
@@ -1123,17 +1202,31 @@ class Kopru extends ChangeNotifier {
         flags,
       ];
 
+  /// Şifreli dosyanın tam boyutu (sunucu üzerinden gönderirken önceden bildirilir).
+  static int sealedFileSize(int size) {
+    final n = size == 0 ? 1 : (size + kChunk - 1) ~/ kChunk;
+    return size + n * (5 + 12 + 16);
+  }
+
+  Future<Map<String, dynamic>> _fileMeta(ActiveTransfer t) async =>
+      _stamp({'name': t.name, 'size': t.size, 'id': t.id, if (t.dir.isNotEmpty) 'dir': t.dir});
+
   Future<void> _sendFile(Peer p, File f, ActiveTransfer t) async {
     t.state = 'running';
     notifyListeners();
     final addr = await _reachable(p);
     if (addr == null) {
-      t.state = 'failed';
+      // Aynı ağda değil: sunucu üzerinden (şifreli)
+      final link = _relays[p.id];
+      if (relayOn && link != null && link.connected) {
+        await _sendFileRelay(p, f, t, link);
+      } else {
+        t.state = 'failed';
+      }
       notifyListeners();
       return;
     }
     final client = HttpClient()..connectionTimeout = const Duration(seconds: 6);
-    RandomAccessFile? raf;
     try {
       final req = await client.post(addr, p.port, '/v1/file');
       t.abort = () {
@@ -1143,11 +1236,62 @@ class Kopru extends ChangeNotifier {
       };
       req.headers.set('x-k-from', myId);
       req.headers.set('x-k-port', '$port');
-      final meta = await p.key.sealJson(_stamp({'name': t.name, 'size': t.size, 'id': t.id, if (t.dir.isNotEmpty) 'dir': t.dir}));
-      req.headers.set('x-k-meta', b64u(meta));
+      req.headers.set('x-k-meta', b64u(await p.key.sealJson(await _fileMeta(t))));
       req.headers.contentType = ContentType.binary;
       req.bufferOutput = false;
-      raf = await f.open();
+      await _writeFrames(req, f, t, p);
+      final res = await req.close().timeout(const Duration(minutes: 2));
+      await res.drain<void>();
+      t.state = res.statusCode == 200 ? 'done' : 'failed';
+    } catch (_) {
+      t.state = t.cancelRequested ? 'cancelled' : 'failed';
+    } finally {
+      client.close(force: true);
+      t.abort = null;
+      notifyListeners();
+    }
+  }
+
+  Future<void> _sendFileRelay(Peer p, File f, ActiveTransfer t, RelayLink link) async {
+    if (t.size > kRelayMax) {
+      t.state = 'failed';
+      _emit(KopruEvent('error', peer: p, text: 'İnternet üzerinden en fazla 100 MB gönderilebilir. ${p.name} ile aynı Wi-Fi\'ye bağlan.'));
+      return;
+    }
+    t.viaRelay = true;
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+    try {
+      final req = await client.putUrl(Uri.parse('$kRelayBase/v1/kopru/file/${link.box}/${t.id}'));
+      t.abort = () {
+        try {
+          req.abort();
+        } catch (_) {}
+      };
+      req.headers.contentType = ContentType.binary;
+      req.contentLength = sealedFileSize(t.size);
+      req.bufferOutput = false;
+      await _writeFrames(req, f, t, p);
+      final res = await req.close().timeout(const Duration(minutes: 5));
+      await res.drain<void>();
+      if (res.statusCode != 200) {
+        t.state = 'failed';
+        return;
+      }
+      final meta = b64u(await p.key.sealJson(await _fileMeta(t)));
+      final ok = link.send(await p.key.sealJson(_stamp({'t': 'rfile', 'id': t.id, 'meta': meta})), keep: true);
+      t.state = ok ? 'done' : 'failed';
+    } catch (_) {
+      t.state = t.cancelRequested ? 'cancelled' : 'failed';
+    } finally {
+      client.close(force: true);
+      t.abort = null;
+    }
+  }
+
+  /// Dosyayı 256 KB'lık şifreli parçalar hâlinde yazar: [uzunluk(4)][bayrak(1)][şifreli parça]
+  Future<void> _writeFrames(IOSink out, File f, ActiveTransfer t, Peer p) async {
+    final raf = await f.open();
+    try {
       var index = 0;
       var sent = 0;
       final sw = Stopwatch()..start();
@@ -1162,9 +1306,9 @@ class Kopru extends ChangeNotifier {
         final header = ByteData(5)
           ..setUint32(0, sealed.length)
           ..setUint8(4, flags);
-        req.add(header.buffer.asUint8List());
-        req.add(sealed);
-        await req.flush();
+        out.add(header.buffer.asUint8List());
+        out.add(sealed);
+        await out.flush();
         sent += chunk.length;
         index++;
         t.done = sent;
@@ -1181,16 +1325,8 @@ class Kopru extends ChangeNotifier {
         }
         if (last) break;
       }
-      final res = await req.close().timeout(const Duration(minutes: 2));
-      await res.drain<void>();
-      t.state = res.statusCode == 200 ? 'done' : 'failed';
-    } catch (_) {
-      t.state = t.cancelRequested ? 'cancelled' : 'failed';
     } finally {
-      await raf?.close();
-      client.close(force: true);
-      t.abort = null;
-      notifyListeners();
+      await raf.close();
     }
   }
 
@@ -1240,6 +1376,43 @@ class Kopru extends ChangeNotifier {
     }
     if (!_fresh(meta)) return _reply(req, 409);
     _seen(peer, req.connectionInfo?.remoteAddress.address, int.tryParse(req.headers.value('x-k-port') ?? ''));
+    final ok = await _receiveStream(req, peer, meta);
+    await _reply(req, ok ? 200 : 400);
+  }
+
+  /// Sunucu üzerinden gelen dosya: indir, aç, sunucudan sil.
+  Future<void> _receiveRelayed(Peer peer, Map<String, dynamic> m) async {
+    final link = _relays[peer.id];
+    final id = m['id']?.toString() ?? '';
+    if (link == null || id.isEmpty) return;
+    final Map<String, dynamic> meta;
+    try {
+      meta = await peer.key.openJson(unb64u(m['meta']?.toString() ?? ''));
+    } catch (_) {
+      return;
+    }
+    if (meta['id']?.toString() != id) return;
+    final url = Uri.parse('$kRelayBase/v1/kopru/file/${link.box}/$id');
+    final client = HttpClient()..connectionTimeout = const Duration(seconds: 10);
+    try {
+      final req = await client.getUrl(url);
+      final res = await req.close();
+      if (res.statusCode != 200) {
+        await res.drain<void>();
+        return;
+      }
+      final ok = await _receiveStream(res, peer, meta, relay: true);
+      if (ok) {
+        final del = await client.deleteUrl(url);
+        await (await del.close()).drain<void>();
+      }
+    } catch (_) {
+    } finally {
+      client.close(force: true);
+    }
+  }
+
+  Future<bool> _receiveStream(Stream<List<int>> stream, Peer peer, Map<String, dynamic> meta, {bool relay = false}) async {
     final id = meta['id'].toString();
     final name = _safeName(meta['name']?.toString() ?? 'dosya');
     // Klasör gönderimi: alt klasörler (güvenli adlarla, en fazla 8 düzey)
@@ -1250,7 +1423,9 @@ class Kopru extends ChangeNotifier {
         .take(8)
         .join('/');
     final size = (meta['size'] as num?)?.toInt() ?? 0;
-    final t = ActiveTransfer(id: id, name: name, size: size, incoming: true, peerId: peer.id, batch: id)..state = 'running';
+    final t = ActiveTransfer(id: id, name: name, size: size, incoming: true, peerId: peer.id, batch: id)
+      ..state = 'running'
+      ..viaRelay = relay;
     active.add(t);
     notifyListeners();
 
@@ -1266,8 +1441,9 @@ class Kopru extends ChangeNotifier {
     var lastTick = 0;
     var lastBytes = 0;
     try {
-      await for (final data in req) {
+      await for (final d in stream) {
         if (gotLast) continue;
+        final data = d is Uint8List ? d : Uint8List.fromList(d);
         if (buf.isEmpty) {
           buf = data;
         } else {
@@ -1322,7 +1498,7 @@ class Kopru extends ChangeNotifier {
       t.state = 'failed';
       notifyListeners();
       _cleanupLater();
-      return _reply(req, 400);
+      return false;
     }
 
     String? location;
@@ -1341,7 +1517,6 @@ class Kopru extends ChangeNotifier {
     }
     t.state = location != null ? 'done' : 'failed';
     t.done = size;
-    await _reply(req, location != null ? 200 : 500);
     await _addHistory(HistoryItem(
       kind: 'file',
       name: name,
@@ -1359,6 +1534,7 @@ class Kopru extends ChangeNotifier {
     }
     notifyListeners();
     _cleanupLater();
+    return location != null;
   }
 
   // Arka arkaya gelen dosyalar için tek bildirim

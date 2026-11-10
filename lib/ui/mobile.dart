@@ -70,6 +70,8 @@ class _MobileShellState extends State<MobileShell> with WidgetsBindingObserver {
         showSnack(context, '${e.peer?.name ?? 'Bilgisayar'} ile eşleşti');
       case 'unpaired':
         showSnack(context, '${e.peer?.name ?? 'Cihaz'} eşleşmeyi kaldırdı');
+      case 'error':
+        showSnack(context, e.text ?? 'Bir sorun oldu');
     }
   }
 
@@ -320,7 +322,7 @@ class _HomeTab extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: oaDisplay(17)),
               const SizedBox(height: 2),
-              Text(p.online ? 'Bağlı · aynı Wi-Fi' : peerStatus(p),
+              Text(p.online ? (k.viaRelay(p) ? 'Bağlı · internet üzerinden' : 'Bağlı · aynı Wi-Fi') : peerStatus(p),
                   style: oaBody(13, color: p.online ? OA.green : OA.muted, weight: FontWeight.w600)),
             ]),
           ),
@@ -596,6 +598,14 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
             _toggleMirror,
             warn: _access == false && k.mirror,
             onTapText: _access == false && k.mirror ? _explainAccess : null,
+          ),
+          const SizedBox(height: 16),
+          _switchRow(
+            'Farklı ağdayken de bağlan',
+            'Bilgisayarla aynı Wi-Fi\'de değilken (mobil veri, iş yeri) OA sunucusu üzerinden, uçtan uca şifreli. '
+                'Dosya başına en fazla 100 MB.',
+            k.relayOn,
+            k.setRelay,
           ),
           const SizedBox(height: 24),
           Text('Eşleşmiş cihazlar', style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
@@ -981,9 +991,11 @@ class SendingScreen extends StatelessWidget {
                   ),
                 ),
                 const SizedBox(height: 16),
-                const Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
-                  OAChip(label: 'Aynı Wi-Fi · doğrudan', dot: OA.green),
-                  OAChip(label: 'Şifreli', icon: Icons.lock_outline),
+                Wrap(alignment: WrapAlignment.center, spacing: 8, runSpacing: 8, children: [
+                  items.any((t) => t.viaRelay)
+                      ? const OAChip(label: 'İnternet üzerinden', dot: OA.blue)
+                      : const OAChip(label: 'Aynı Wi-Fi · doğrudan', dot: OA.green),
+                  const OAChip(label: 'Şifreli', icon: Icons.lock_outline),
                 ]),
                 const SizedBox(height: 32),
                 if (finished)
