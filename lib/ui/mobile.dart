@@ -34,6 +34,9 @@ class _MobileShellState extends State<MobileShell> with WidgetsBindingObserver {
     WidgetsBinding.instance.addObserver(this);
     _sub = k.events.listen(_onEvent);
     Native.onShared = _onShared;
+    Native.onRingStopped = () {
+      if (_ringOpen && mounted) Navigator.of(context, rootNavigator: true).pop();
+    };
     Native.initialShare().then((s) {
       if (s != null) _onShared(s);
     });
@@ -108,7 +111,7 @@ class _MobileShellState extends State<MobileShell> with WidgetsBindingObserver {
     }
     final text = s['text']?.toString() ?? '';
     if (text.isEmpty) return;
-    final ok = await k.sendText(p, text);
+    final ok = await k.sendText(p, text, open: s['open'] == true);
     if (mounted) showSnack(context, ok ? '${p.name} cihazına gönderildi' : '${p.name} bağlı değil');
   }
 
@@ -177,6 +180,22 @@ class _HomeTab extends StatelessWidget {
       true => 'Pano gönderildi; bilgisayarda yapıştırabilirsin',
       false => '${p.name} bağlı değil',
     });
+  }
+
+  Future<void> _screenshot(BuildContext context, Peer p) async {
+    final (batch, err) = await Kopru.i.sendLatestScreenshot(p);
+    if (!context.mounted) return;
+    if (err != null) {
+      showSnack(context, err);
+      return;
+    }
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => SendingScreen(batch: batch!)));
+  }
+
+  Future<void> _media(BuildContext context, Peer p, String key) async {
+    HapticFeedback.selectionClick();
+    final ok = await Kopru.i.media(p, key);
+    if (!ok && context.mounted) showSnack(context, '${p.name} bağlı değil');
   }
 
   Future<void> _lock(BuildContext context, Peer p) async {
@@ -279,6 +298,7 @@ class _HomeTab extends StatelessWidget {
       ('Dosya gönder', Icons.insert_drive_file_outlined, () => _pick(context, p, FileType.any)),
       ('Fotoğraf gönder', Icons.image_outlined, () => _pick(context, p, FileType.media)),
       ('Panoyu gönder', Icons.content_paste_go_outlined, () => _sendClip(context, p)),
+      ('Son ekran görüntüsü', Icons.screenshot_outlined, () => _screenshot(context, p)),
       if (p.isComputer) ('Bilgisayarı kilitle', Icons.lock_outline, () => _lock(context, p)),
     ];
     final running = k.active.toList();
@@ -321,6 +341,35 @@ class _HomeTab extends StatelessWidget {
             ),
         ],
       ),
+      if (p.isComputer) ...[
+        const SizedBox(height: 12),
+        OACard(
+          padding: const EdgeInsets.fromLTRB(16, 14, 16, 14),
+          child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+            Text('Kumanda', style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
+            const SizedBox(height: 10),
+            Row(mainAxisAlignment: MainAxisAlignment.spaceBetween, children: [
+              for (final b in const [
+                ('prev', Icons.skip_previous, 'Önceki'),
+                ('playpause', Icons.play_arrow, 'Oynat / duraklat'),
+                ('next', Icons.skip_next, 'Sonraki'),
+                ('voldown', Icons.volume_down, 'Sesi kıs'),
+                ('volup', Icons.volume_up, 'Sesi aç'),
+                ('mute', Icons.volume_off, 'Sessiz'),
+              ])
+                IconButton(
+                  tooltip: b.$3,
+                  style: IconButton.styleFrom(
+                    minimumSize: const Size(46, 46),
+                    backgroundColor: b.$1 == 'playpause' ? OA.amber : OA.surface2,
+                  ),
+                  onPressed: () => _media(context, p, b.$1),
+                  icon: Icon(b.$2, color: b.$1 == 'playpause' ? OA.amberInk : OA.text),
+                ),
+            ]),
+          ]),
+        ),
+      ],
       if (running.isNotEmpty) ...[
         const SizedBox(height: 12),
         OACard(
@@ -423,16 +472,83 @@ class _SettingsTab extends StatefulWidget {
   State<_SettingsTab> createState() => _SettingsTabState();
 }
 
-class _SettingsTabState extends State<_SettingsTab> {
+class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver {
   final k = Kopru.i;
   late final _name = TextEditingController(text: k.myName);
   String? _updateText;
   UpdateInfo? _update;
+  bool? _access;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _checkAccess();
+  }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _name.dispose();
     super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) _checkAccess();
+  }
+
+  Future<void> _checkAccess() async {
+    final a = await Native.notificationAccess();
+    if (mounted) setState(() => _access = a);
+  }
+
+  Future<void> _toggleMirror(bool on) async {
+    await k.setMirror(on);
+    if (on && !(await Native.notificationAccess())) await _explainAccess();
+  }
+
+  Future<void> _explainAccess() async {
+    await showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Bildirim erişimi', style: oaDisplay(22)),
+        content: Text(
+          'Açılan ekranda Pusula Köprü\'yü bul ve izni aç.\n\n'
+          'İzin gri ve açılmıyorsa: Ayarlar → Uygulamalar → Pusula Köprü → sağ üstteki ⋮ → '
+          '"Kısıtlanmış ayarlara izin ver", sonra tekrar dene. (Android bunu Google Play dışından kurulan uygulamalarda ister.)',
+          style: oaBody(15, color: OA.text2, height: 1.5),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Vazgeç')),
+          FilledButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              Native.openNotificationAccess();
+            },
+            child: const Text('Ayarları aç'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _switchRow(String title, String text, bool value, ValueChanged<bool> onChanged,
+      {bool warn = false, VoidCallback? onTapText}) {
+    return Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Expanded(
+        child: InkWell(
+          onTap: onTapText,
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: oaBody(15, weight: FontWeight.w600)),
+            const SizedBox(height: 2),
+            Text(text, style: oaBody(13, color: warn ? OA.danger : OA.muted, height: 1.4)),
+          ]),
+        ),
+      ),
+      const SizedBox(width: 12),
+      Switch(value: value, onChanged: onChanged),
+    ]);
   }
 
   @override
@@ -457,6 +573,25 @@ class _SettingsTabState extends State<_SettingsTab> {
             },
           ),
           const SizedBox(height: 24),
+          _switchRow(
+            'Arka planda çalış',
+            'Uygulama kapalıyken de bilgisayardan gelen dosyaları alır ve "Telefonu çaldır" çalışır. '
+                'Bildirim çubuğunda sessiz bir "Pusula Köprü açık" bildirimi durur.',
+            k.background,
+            k.setBackground,
+          ),
+          const SizedBox(height: 16),
+          _switchRow(
+            'Bildirimleri bilgisayara ilet',
+            _access == false && k.mirror
+                ? 'Bildirim erişimi kapalı. Açmak için dokun.'
+                : 'Telefona gelen bildirimler bilgisayarda görünür; mesajlara bilgisayardan yanıt verebilirsin.',
+            k.mirror,
+            _toggleMirror,
+            warn: _access == false && k.mirror,
+            onTapText: _access == false && k.mirror ? _explainAccess : null,
+          ),
+          const SizedBox(height: 24),
           Text('Eşleşmiş cihazlar', style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
           const SizedBox(height: 4),
           if (k.peers.isEmpty) Text('Henüz yok.', style: oaBody(15, color: OA.muted)),
@@ -478,13 +613,7 @@ class _SettingsTabState extends State<_SettingsTab> {
           const SizedBox(height: 6),
           Text('İndirilenler / Pusula Köprü', style: oaBody(15, color: OA.text2)),
           const SizedBox(height: 24),
-          Text('Bilgi', style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
-          const SizedBox(height: 6),
-          Text(
-            'Bilgisayardan gelenleri alabilmek için Pusula Köprü telefonda açık ya da son kullanılanlarda olmalı.',
-            style: oaBody(14, color: OA.text2, height: 1.5),
-          ),
-          const SizedBox(height: 24),
+
           Row(children: [
             Expanded(
                 child: Text('Sürüm ${appVersion == '0.0.0' ? 'geliştirme' : appVersion}', style: oaBody(14, color: OA.muted))),

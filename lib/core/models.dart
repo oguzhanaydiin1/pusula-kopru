@@ -116,7 +116,9 @@ class ActiveTransfer {
     required this.incoming,
     required this.peerId,
     required this.batch,
+    this.dir = '',
   });
+  final String dir; // klasör gönderiminde alt klasör (ör. "Tatil/2024")
 
   final String id;
   final String name;
@@ -219,3 +221,34 @@ String mimeFor(String name) {
 
 bool isImageName(String name) => mimeFor(name).startsWith('image/');
 bool isVideoName(String name) => mimeFor(name).startsWith('video/');
+
+/// Telefondan bilgisayara yansıyan bir bildirim.
+class PhoneNotif {
+  PhoneNotif({
+    required this.key,
+    required this.app,
+    required this.title,
+    required this.text,
+    required this.at,
+    required this.canReply,
+    required this.peerId,
+  });
+  final String key;
+  final String app;
+  final String title;
+  final String text;
+  final DateTime at;
+  final bool canReply;
+  final String peerId;
+  String? replied; // gönderilen yanıt
+
+  static PhoneNotif fromMsg(Map<String, dynamic> m, String peerId) => PhoneNotif(
+        key: m['key']?.toString() ?? '',
+        app: m['app']?.toString() ?? '',
+        title: m['title']?.toString() ?? '',
+        text: m['text']?.toString() ?? '',
+        at: DateTime.fromMillisecondsSinceEpoch((m['time'] as num?)?.toInt() ?? DateTime.now().millisecondsSinceEpoch),
+        canReply: m['canReply'] == true,
+        peerId: peerId,
+      );
+}

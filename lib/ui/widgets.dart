@@ -1,3 +1,5 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -155,7 +157,7 @@ class HistoryTile extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.symmetric(vertical: compact ? 12 : 14),
         child: Row(children: [
-          IconBox(icon, size: 40, color: h.ok ? OA.text2 : OA.danger, radius: 12),
+          _thumb(h) ?? IconBox(icon, size: 40, color: h.ok ? OA.text2 : OA.danger, radius: 12),
           const SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -173,6 +175,18 @@ class HistoryTile extends StatelessWidget {
       ),
     );
   }
+}
+
+/// Fotoğraflar için küçük resim (dosya bu cihazdaysa).
+Widget? _thumb(HistoryItem h) {
+  final loc = h.location;
+  if (h.kind != 'file' || loc == null || !isImageName(h.name) || loc.startsWith('content://')) return null;
+  final f = File(loc);
+  if (!f.existsSync()) return null;
+  return ClipRRect(
+    borderRadius: BorderRadius.circular(12),
+    child: Image.file(f, width: 40, height: 40, fit: BoxFit.cover, cacheWidth: 96, errorBuilder: (_, __, ___) => const IconBox(Icons.image_outlined, size: 40, color: OA.text2, radius: 12)),
+  );
 }
 
 Future<void> copyText(BuildContext context, String text) async {

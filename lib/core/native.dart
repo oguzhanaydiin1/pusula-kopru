@@ -2,18 +2,28 @@ import 'dart:io';
 
 import 'package:flutter/services.dart';
 
-/// Android'deki "kopru/native" kanalı (MainActivity.kt). Windows'ta çağrılar boş döner.
+/// Android'deki "kopru/native" kanalı (NativeBridge.kt). Windows'ta çağrılar boş döner.
 class Native {
   Native._();
   static const _ch = MethodChannel('kopru/native');
 
   static void Function(Map<String, dynamic>)? onShared;
+  static void Function()? onRingStopped;
+  static void Function(Map<String, dynamic>)? onNotification; // bildirim aynası (0.3)
+  static void Function(String key)? onNotificationRemoved;
 
   static void init() {
     if (!Platform.isAndroid) return;
     _ch.setMethodCallHandler((call) async {
-      if (call.method == 'shared' && call.arguments is Map) {
-        onShared?.call(Map<String, dynamic>.from(call.arguments as Map));
+      switch (call.method) {
+        case 'shared':
+          if (call.arguments is Map) onShared?.call(Map<String, dynamic>.from(call.arguments as Map));
+        case 'ringStopped':
+          onRingStopped?.call();
+        case 'notification':
+          if (call.arguments is Map) onNotification?.call(Map<String, dynamic>.from(call.arguments as Map));
+        case 'notificationRemoved':
+          onNotificationRemoved?.call(call.arguments?.toString() ?? '');
       }
       return null;
     });
@@ -42,13 +52,13 @@ class Native {
   }
 
   static Future<void> multicast() => _call('multicast');
-  static Future<void> ring() => _call('ring');
+  static Future<void> ring(String from) => _call('ring', {'from': from});
   static Future<void> stopRing() => _call('stopRing');
 
-  /// Dosyayı İndirilenler/Pusula Köprü'ye taşır; açmak için adresini döndürür.
-  static Future<String?> saveToDownloads(String path, String name, String mime) async {
+  /// Dosyayı İndirilenler/Pusula Köprü(/alt klasör)'e taşır; açmak için adresini döndürür.
+  static Future<String?> saveToDownloads(String path, String name, String mime, {String sub = ''}) async {
     if (!Platform.isAndroid) return null;
-    return _ch.invokeMethod<String>('saveToDownloads', {'path': path, 'name': name, 'mime': mime});
+    return _ch.invokeMethod<String>('saveToDownloads', {'path': path, 'name': name, 'mime': mime, 'sub': sub});
   }
 
   static Future<bool> openUri(String uri, String? mime) async =>
@@ -57,4 +67,28 @@ class Native {
   static Future<bool> openDownloads() async => await _call<bool>('openDownloads') ?? false;
 
   static Future<bool> openInPusula(String url) async => await _call<bool>('openInPusula', {'url': url}) ?? false;
+
+  /// Arka plan hizmeti (bildirim çubuğunda "Pusula Köprü açık").
+  static Future<void> setBackground(bool on) => _call('setBackground', {'on': on});
+
+  static Future<void> requestNotifications() => _call('requestNotifications');
+
+  static Future<void> notify(String title, String text, {String? uri, String? mime, String? url}) =>
+      _call('notify', {'title': title, 'text': text, 'uri': uri, 'mime': mime, 'url': url});
+
+  /// Ekran açık ve uygulama önde mi?
+  static Future<bool> isForeground() async => await _call<bool>('isForeground') ?? false;
+
+  /// Son ekran görüntüsü: {path} | {none: true} | {permission: true} (izin istendi)
+  static Future<Map<String, dynamic>?> latestScreenshot() async {
+    final v = await _call<Map>('latestScreenshot');
+    return v == null ? null : Map<String, dynamic>.from(v);
+  }
+
+  // Bildirim aynası (0.3)
+  static Future<bool> notificationAccess() async => await _call<bool>('notificationAccess') ?? false;
+  static Future<void> openNotificationAccess() => _call('openNotificationAccess');
+  static Future<bool> replyNotification(String key, String text) async =>
+      await _call<bool>('replyNotification', {'key': key, 'text': text}) ?? false;
+  static Future<void> setMirror(bool on) => _call('setMirror', {'on': on});
 }

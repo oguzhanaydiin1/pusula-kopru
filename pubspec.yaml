@@ -1,7 +1,7 @@
 name: pusula_kopru
 description: Pusula Köprü — bilgisayar ile telefon arasında dosya, bağlantı ve pano paylaşımı (OA Labs).
 publish_to: 'none'
-version: 0.1.2+3
+version: 0.2.0+4
 
 environment:
   sdk: '>=3.3.0 <4.0.0'
@@ -20,6 +20,9 @@ dependencies:
   url_launcher: ^6.3.0
   desktop_drop: '>=0.4.4 <1.0.0'
   path_provider: ^2.1.5
+  window_manager: ^0.5.1
+  tray_manager: ^0.5.0
+  local_notifier: ^0.1.6
 
 dev_dependencies:
   flutter_test:
@@ -29,3 +32,5 @@ dev_dependencies:
 
 flutter:
   uses-material-design: true
+  assets:
+    - assets/icon/tray.ico

@@ -4,13 +4,17 @@ import 'package:flutter/material.dart';
 
 import 'core/native.dart';
 import 'core/node.dart';
+import 'core/notifier.dart';
+import 'desktop_host.dart';
 import 'theme.dart';
 import 'ui/desktop.dart';
 import 'ui/mobile.dart';
 
-Future<void> main() async {
+Future<void> main(List<String> args) async {
   WidgetsFlutterBinding.ensureInitialized();
   Native.init();
+  await Notifier.init();
+  await DesktopHost.i.init(args);
   await Kopru.i.start();
   runApp(const KopruApp());
 }

@@ -9,11 +9,13 @@ import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:http/http.dart' as http;
 import 'package:path_provider/path_provider.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../updater.dart' show appVersion;
 import 'crypto.dart';
 import 'models.dart';
 import 'native.dart';
+import 'notifier.dart';
 
 /// Pusula Köprü'nün çekirdeği.
 ///
@@ -68,6 +70,10 @@ class Kopru extends ChangeNotifier {
   PairSession? pairSession;
 
   bool clipShare = true;
+  bool background = true; // Android: arka planda çalış
+  bool autostart = true; // Windows: Windows açılınca başla
+  bool mirror = false; // Android: bildirimleri bilgisayara ilet
+  final phoneNotifs = <PhoneNotif>[]; // Windows: telefondan gelen bildirimler
   String? myClip; // bilgisayarda son kopyalanan
   DateTime? myClipAt;
   String? _lastClipSeen;
@@ -117,6 +123,9 @@ class Kopru extends ChangeNotifier {
       await _prefs.setString('id', myId);
     }
     clipShare = _prefs.getBool('clipShare') ?? true;
+    background = _prefs.getBool('background') ?? true;
+    autostart = _prefs.getBool('autostart') ?? true;
+    mirror = _prefs.getBool('mirror') ?? false;
     _selectedId = _prefs.getString('selected');
     myName = _prefs.getString('name') ?? '';
     if (myName.isEmpty) myName = await _defaultName();
@@ -142,7 +151,22 @@ class Kopru extends ChangeNotifier {
       }
     } catch (_) {}
 
-    if (Platform.isAndroid) await Native.multicast();
+    if (Platform.isWindows && await _otherInstance()) {
+      // Pusula Köprü zaten açık: onun penceresi öne geldi, bu kopya kapanır.
+      exit(0);
+    }
+    if (Platform.isAndroid) {
+      await Native.multicast();
+      Native.onNotification = _mirrorOut;
+      Native.onNotificationRemoved = (key) {
+        if (!mirror) return;
+        for (final p in peers.where((p) => p.online && p.isComputer)) {
+          _send(p, {'t': 'notifGone', 'key': key});
+        }
+      };
+      if (peers.isNotEmpty && background) Native.setBackground(true);
+    }
+    if (Platform.isWindows) _applyAutostart(autostart);
     await _startServer();
     await _startDiscovery();
 
@@ -173,6 +197,53 @@ class Kopru extends ChangeNotifier {
     _announce();
     for (final p in peers.where((p) => p.online)) {
       _send(p, {'t': 'status', ..._statusFields()});
+    }
+  }
+
+  Future<void> setBackground(bool v) async {
+    background = v;
+    await _prefs.setBool('background', v);
+    await Native.setBackground(v && peers.isNotEmpty);
+    notifyListeners();
+  }
+
+  Future<void> setAutostart(bool v) async {
+    autostart = v;
+    await _prefs.setBool('autostart', v);
+    await _applyAutostart(v);
+    notifyListeners();
+  }
+
+  Future<void> setMirror(bool v) async {
+    mirror = v;
+    await _prefs.setBool('mirror', v);
+    await Native.setMirror(v);
+    notifyListeners();
+  }
+
+  Future<void> _applyAutostart(bool on) async {
+    if (!Platform.isWindows) return;
+    const key = r'HKCU\Software\Microsoft\Windows\CurrentVersion\Run';
+    try {
+      if (on) {
+        await Process.run('reg', ['add', key, '/v', 'PusulaKopru', '/t', 'REG_SZ', '/d', '"${Platform.resolvedExecutable}" --hidden', '/f']);
+      } else {
+        await Process.run('reg', ['delete', key, '/v', 'PusulaKopru', '/f']);
+      }
+    } catch (_) {}
+  }
+
+  /// Windows: aynı bilgisayarda Pusula Köprü zaten açıksa onu öne getirir.
+  Future<bool> _otherInstance() async {
+    try {
+      final r = await http.get(Uri.parse('http://127.0.0.1:$kPort/v1/hello')).timeout(const Duration(milliseconds: 800));
+      if (r.statusCode != 200) return false;
+      final j = jsonDecode(utf8.decode(r.bodyBytes));
+      if (j is! Map || j['id'] != myId) return false;
+      await http.get(Uri.parse('http://127.0.0.1:$kPort/v1/local/show')).timeout(const Duration(seconds: 2));
+      return true;
+    } catch (_) {
+      return false;
     }
   }
 
@@ -251,6 +322,7 @@ class Kopru extends ChangeNotifier {
         return await _replyJson(req, {'id': myId, 'n': myName, 'p': platform, 'pub': b64u(s.pub)});
       }
       if (req.method == 'POST' && path == '/v1/pair') return await _handlePair(req);
+      if (path.startsWith('/v1/local/')) return await _handleLocal(req, path);
 
       final peer = peerById(req.headers.value('x-k-from'));
       if (peer == null) {
@@ -275,6 +347,42 @@ class Kopru extends ChangeNotifier {
     } catch (_) {
       return await _reply(req, 400);
     }
+  }
+
+  /// Bu bilgisayardaki uygulamalar için (ör. Pusula Browser'ın "Telefona gönder" düğmesi).
+  /// Yalnız aynı bilgisayardan (127.0.0.1) gelen istekler kabul edilir.
+  Future<void> _handleLocal(HttpRequest req, String path) async {
+    final from = req.connectionInfo?.remoteAddress;
+    if (from == null || !from.isLoopback) {
+      await _readAll(req, 1 << 16).catchError((_) => Uint8List(0));
+      return await _reply(req, 403);
+    }
+    if (path == '/v1/local/show') {
+      Notifier.showWindow?.call();
+      return await _replyJson(req, {'ok': true});
+    }
+    if (path == '/v1/local/status') {
+      return await _replyJson(req, {
+        'ok': true,
+        'name': myName,
+        'peers': [
+          for (final p in peers) {'id': p.id, 'name': p.name, 'platform': p.platform, 'online': p.online},
+        ],
+      });
+    }
+    if (path == '/v1/local/send' && req.method == 'POST') {
+      final j = jsonDecode(utf8.decode(await _readAll(req, 1 << 20)));
+      if (j is! Map) return await _reply(req, 400);
+      final text = j['text']?.toString() ?? '';
+      final target = peerById(j['peer']?.toString()) ??
+          (selected?.isPhone == true ? selected : null) ??
+          peers.where((p) => p.isPhone && p.online).firstOrNull ??
+          peers.where((p) => p.isPhone).firstOrNull;
+      if (target == null) return await _replyJson(req, {'ok': false, 'error': 'eslesme'});
+      final ok = await sendText(target, text, open: j['open'] == true);
+      return await _replyJson(req, {'ok': ok, 'peer': target.name, if (!ok) 'error': 'ulasilamadi'});
+    }
+    return await _reply(req, 404);
   }
 
   /// Aynı ileti ikinci kez (araya giren biri tarafından) gönderilemesin.
@@ -335,6 +443,20 @@ class Kopru extends ChangeNotifier {
           peerName: peer.name,
           at: DateTime.now(),
         ));
+        final link = looksLikeLink(text);
+        if (m['open'] == true && link) {
+          // "Telefona/Bilgisayara gönder": bağlantı hemen açılsın
+          if (Platform.isWindows) {
+            await launchUrl(Uri.parse(linkUrl(text)), mode: LaunchMode.externalApplication);
+          } else if (await Native.isForeground()) {
+            await Native.openInPusula(linkUrl(text));
+          } else {
+            await Notifier.show('${peer.name}: bağlantı', 'Dokun, Pusula\'da aç · $text', url: linkUrl(text), always: true);
+          }
+        } else {
+          await Notifier.show(link ? '${peer.name}: bağlantı' : '${peer.name}: metin', text,
+              url: link ? linkUrl(text) : null);
+        }
         _emit(KopruEvent('text', peer: peer, text: text));
         return null;
       case 'clip':
@@ -364,7 +486,7 @@ class Kopru extends ChangeNotifier {
         return null;
       case 'ring':
         if (isPhone) {
-          await Native.ring();
+          await Native.ring(peer.name);
           _emit(KopruEvent('ring', peer: peer));
         }
         return null;
@@ -374,6 +496,26 @@ class Kopru extends ChangeNotifier {
           _emit(KopruEvent('ringStop', peer: peer));
         }
         return null;
+      case 'media':
+        if (Platform.isWindows) await _mediaKey(m['key']?.toString() ?? '');
+        return null;
+      case 'notif':
+        if (!Platform.isWindows) return null;
+        final n = PhoneNotif.fromMsg(m, peer.id);
+        if (n.key.isEmpty) return null;
+        phoneNotifs.removeWhere((x) => x.key == n.key);
+        phoneNotifs.insert(0, n);
+        if (phoneNotifs.length > 50) phoneNotifs.removeRange(50, phoneNotifs.length);
+        notifyListeners();
+        await Notifier.show(n.title.isEmpty ? n.app : '${n.app} · ${n.title}', n.text);
+        return null;
+      case 'notifGone':
+        phoneNotifs.removeWhere((x) => x.key == m['key']);
+        notifyListeners();
+        return null;
+      case 'notifReply':
+        if (!Platform.isAndroid) return {'ok': false};
+        return {'ok': await Native.replyNotification(m['key']?.toString() ?? '', m['text']?.toString() ?? '')};
       case 'lock':
         if (Platform.isWindows) {
           await Process.run('rundll32.exe', ['user32.dll,LockWorkStation']);
@@ -712,14 +854,20 @@ class Kopru extends ChangeNotifier {
     nearby.remove(id);
     _emit(KopruEvent('paired', peer: peer));
     notifyListeners();
-    if (isPhone) sendStatus(only: peer);
+    if (isPhone) {
+      sendStatus(only: peer);
+      Native.requestNotifications();
+      if (background) Native.setBackground(true);
+    }
     return peer;
   }
 
   Future<void> unpair(Peer p) async {
     await _send(p, {'t': 'unpair'});
     peers.removeWhere((x) => x.id == p.id);
+    phoneNotifs.removeWhere((n) => n.peerId == p.id);
     await _savePeers();
+    if (peers.isEmpty) Native.setBackground(false);
     notifyListeners();
   }
 
@@ -754,10 +902,10 @@ class Kopru extends ChangeNotifier {
     return null;
   }
 
-  Future<bool> sendText(Peer p, String text) async {
+  Future<bool> sendText(Peer p, String text, {bool open = false}) async {
     final t = text.trim();
     if (t.isEmpty) return false;
-    final ok = await _send(p, {'t': 'text', 'text': t}) != null;
+    final ok = await _send(p, {'t': 'text', 'text': t, if (open) 'open': true}) != null;
     if (ok) {
       await _addHistory(HistoryItem(
           kind: looksLikeLink(t) ? 'link' : 'text', name: t, incoming: false, peerName: p.name, at: DateTime.now()));
@@ -781,6 +929,61 @@ class Kopru extends ChangeNotifier {
   Future<bool> ring(Peer p) async => await _send(p, {'t': 'ring'}) != null;
   Future<bool> stopRemoteRing(Peer p) async => await _send(p, {'t': 'ringStop'}) != null;
   Future<bool> lockComputer(Peer p) async => await _send(p, {'t': 'lock'}) != null;
+  Future<bool> media(Peer p, String key) async => await _send(p, {'t': 'media', 'key': key}) != null;
+
+  /// Bilgisayar: telefondaki bir bildirime yanıt.
+  Future<bool> replyNotif(PhoneNotif n, String text) async {
+    final p = peerById(n.peerId);
+    if (p == null) return false;
+    final r = await _send(p, {'t': 'notifReply', 'key': n.key, 'text': text});
+    final ok = r?['ok'] == true;
+    if (ok) {
+      n.replied = text;
+      notifyListeners();
+    }
+    return ok;
+  }
+
+  void dismissNotif(PhoneNotif n) {
+    phoneNotifs.remove(n);
+    notifyListeners();
+  }
+
+  /// Telefon: bildirimi bilgisayar(lar)a ilet.
+  void _mirrorOut(Map<String, dynamic> m) {
+    if (!mirror) return;
+    for (final p in peers.where((p) => p.online && p.isComputer)) {
+      _send(p, {'t': 'notif', ...m});
+    }
+  }
+
+  /// Windows: medya ve ses tuşları (telefondan kumanda).
+  Future<void> _mediaKey(String key) async {
+    const codes = {'playpause': 179, 'next': 176, 'prev': 177, 'volup': 175, 'voldown': 174, 'mute': 173};
+    final c = codes[key];
+    if (c == null) return;
+    final times = (key == 'volup' || key == 'voldown') ? 3 : 1;
+    try {
+      await Process.run('powershell', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-WindowStyle',
+        'Hidden',
+        '-Command',
+        '\$w = New-Object -ComObject WScript.Shell; 1..$times | ForEach-Object { \$w.SendKeys([char]$c) }',
+      ]);
+    } catch (_) {}
+  }
+
+  /// Telefon: son ekran görüntüsünü gönderir. null: gönderildi (toplu kimlik döner)
+  Future<(String?, String?)> sendLatestScreenshot(Peer p) async {
+    final r = await Native.latestScreenshot();
+    if (r == null) return (null, 'Ekran görüntüsü okunamadı');
+    if (r['permission'] == true) return (null, 'Fotoğraflara erişim izni ver, sonra tekrar dene');
+    final path = r['path']?.toString();
+    if (path == null) return (null, 'Ekran görüntüsü bulunamadı');
+    return (sendFiles(p, [path]), null);
+  }
 
   Future<void> sendStatus({Peer? only}) async {
     final b = await Native.battery();
@@ -836,22 +1039,40 @@ class Kopru extends ChangeNotifier {
   // ---------------------------------------------------------------- dosyalar
 
   /// Dosyaları sırayla gönderir. Toplu gönderimin kimliğini döndürür (gönderim ekranı için).
+  /// Klasörler içindeki dosyalarla birlikte gönderilir; karşıda aynı klasör yapısı kurulur.
   String sendFiles(Peer p, List<String> paths) {
     final batch = b64u(randomBytes(6));
     final items = <(ActiveTransfer, File)>[];
-    for (final path in paths) {
-      final f = File(path);
-      if (!f.existsSync()) continue;
+    void add(File f, String dir) {
       final t = ActiveTransfer(
         id: b64u(randomBytes(9)),
-        name: path.split(RegExp(r'[\\/]')).last,
+        name: f.path.split(RegExp(r'[\\/]')).last,
         size: f.lengthSync(),
         incoming: false,
         peerId: p.id,
         batch: batch,
+        dir: dir,
       );
       active.add(t);
       items.add((t, f));
+    }
+
+    for (final path in paths) {
+      final type = FileSystemEntity.typeSync(path);
+      if (type == FileSystemEntityType.file) {
+        add(File(path), '');
+      } else if (type == FileSystemEntityType.directory) {
+        final root = Directory(path);
+        final base = root.path.split(RegExp(r'[\\/]')).where((e) => e.isNotEmpty).last;
+        try {
+          for (final e in root.listSync(recursive: true, followLinks: false)) {
+            if (e is! File) continue;
+            final rel = e.parent.path.substring(root.path.length).replaceAll('\\', '/');
+            add(e, '$base$rel'.replaceAll(RegExp(r'/+$'), ''));
+            if (items.length >= 2000) break;
+          }
+        } catch (_) {}
+      }
     }
     notifyListeners();
     () async {
@@ -922,7 +1143,7 @@ class Kopru extends ChangeNotifier {
       };
       req.headers.set('x-k-from', myId);
       req.headers.set('x-k-port', '$port');
-      final meta = await p.key.sealJson(_stamp({'name': t.name, 'size': t.size, 'id': t.id}));
+      final meta = await p.key.sealJson(_stamp({'name': t.name, 'size': t.size, 'id': t.id, if (t.dir.isNotEmpty) 'dir': t.dir}));
       req.headers.set('x-k-meta', b64u(meta));
       req.headers.contentType = ContentType.binary;
       req.bufferOutput = false;
@@ -1021,6 +1242,13 @@ class Kopru extends ChangeNotifier {
     _seen(peer, req.connectionInfo?.remoteAddress.address, int.tryParse(req.headers.value('x-k-port') ?? ''));
     final id = meta['id'].toString();
     final name = _safeName(meta['name']?.toString() ?? 'dosya');
+    // Klasör gönderimi: alt klasörler (güvenli adlarla, en fazla 8 düzey)
+    final sub = (meta['dir']?.toString() ?? '')
+        .split(RegExp(r'[\\/]'))
+        .map((e) => _safeName(e))
+        .where((e) => e.isNotEmpty && e != 'dosya' && !e.startsWith('.'))
+        .take(8)
+        .join('/');
     final size = (meta['size'] as num?)?.toInt() ?? 0;
     final t = ActiveTransfer(id: id, name: name, size: size, incoming: true, peerId: peer.id, batch: id)..state = 'running';
     active.add(t);
@@ -1100,9 +1328,11 @@ class Kopru extends ChangeNotifier {
     String? location;
     try {
       if (Platform.isAndroid) {
-        location = await Native.saveToDownloads(part.path, name, mimeFor(name));
+        location = await Native.saveToDownloads(part.path, name, mimeFor(name), sub: sub);
       } else {
-        final dest = _unique(dir, name);
+        final target = sub.isEmpty ? dir : Directory('${dir.path}\\${sub.replaceAll('/', '\\')}');
+        if (!target.existsSync()) target.createSync(recursive: true);
+        final dest = _unique(target, name);
         await part.rename(dest.path);
         location = dest.path;
       }
@@ -1123,9 +1353,36 @@ class Kopru extends ChangeNotifier {
       mime: mimeFor(name),
       ok: location != null,
     ));
-    if (location != null) _emit(KopruEvent('received', peer: peer, text: name));
+    if (location != null) {
+      _emit(KopruEvent('received', peer: peer, text: name));
+      _notifyReceived(peer, sub.isEmpty ? name : '${sub.split('/').first}/', location, name);
+    }
     notifyListeners();
     _cleanupLater();
+  }
+
+  // Arka arkaya gelen dosyalar için tek bildirim
+  Timer? _recvTimer;
+  final _recvNames = <String>[];
+  String? _recvLoc;
+  String? _recvMime;
+  void _notifyReceived(Peer peer, String label, String location, String name) {
+    if (!_recvNames.contains(label)) _recvNames.add(label);
+    _recvLoc = location;
+    _recvMime = mimeFor(name);
+    _recvTimer?.cancel();
+    _recvTimer = Timer(const Duration(milliseconds: 1500), () {
+      final n = _recvNames.length;
+      final title = n == 1 ? '${peer.name} gönderdi' : '${peer.name}: $n öğe geldi';
+      final body = n == 1 ? _recvNames.first : _recvNames.take(3).join(', ') + (n > 3 ? '…' : '');
+      final loc = _recvLoc;
+      final single = n == 1 && !_recvNames.first.endsWith('/');
+      Notifier.show(title, body,
+          uri: Platform.isAndroid && single ? loc : null,
+          mime: _recvMime,
+          onClick: Platform.isWindows && loc != null ? () => Process.run('explorer.exe', ['/select,', loc]) : null);
+      _recvNames.clear();
+    });
   }
 
   Future<void> openHistoryItem(HistoryItem h) async {

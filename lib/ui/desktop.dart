@@ -72,10 +72,14 @@ class _DesktopHomeState extends State<DesktopHome> {
       showSnack(context, 'Önce bir telefon eşleştir');
       return;
     }
-    final files = paths.where((e) => FileSystemEntity.typeSync(e) == FileSystemEntityType.file).toList();
-    final skipped = paths.length - files.length;
-    if (files.isNotEmpty) k.sendFiles(p, files);
-    if (skipped > 0) showSnack(context, 'Klasörler gönderilemiyor; içindeki dosyaları seç');
+    if (paths.isNotEmpty) k.sendFiles(p, paths);
+  }
+
+  Future<void> _pickFolder() async {
+    final p = k.selected;
+    if (p == null) return;
+    final dir = await FilePicker.platform.getDirectoryPath(dialogTitle: 'Gönderilecek klasör');
+    if (dir != null) k.sendFiles(p, [dir]);
   }
 
   Future<void> _sendText() async {
@@ -347,7 +351,7 @@ class _DesktopHomeState extends State<DesktopHome> {
             Text(sel.isPhone ? 'Telefona göndermek için buraya bırak' : '${sel.name} cihazına göndermek için buraya bırak',
                 textAlign: TextAlign.center, style: oaDisplay(30)),
             const SizedBox(height: 10),
-            Text('Dosya ya da fotoğraf. Aynı Wi-Fi\'deyken doğrudan ve şifreli gider.',
+            Text('Dosya, fotoğraf ya da klasör. Aynı Wi-Fi\'deyken doğrudan ve şifreli gider.',
                 textAlign: TextAlign.center, style: oaBody(17, color: OA.text2)),
             const SizedBox(height: 20),
             Wrap(alignment: WrapAlignment.center, spacing: 12, runSpacing: 12, children: [
@@ -355,6 +359,11 @@ class _DesktopHomeState extends State<DesktopHome> {
                 style: FilledButton.styleFrom(minimumSize: const Size(0, 54), padding: const EdgeInsets.symmetric(horizontal: 28)),
                 onPressed: _pickFiles,
                 child: Text('Dosya seç', style: oaBody(17, color: OA.amberInk, weight: FontWeight.w600)),
+              ),
+              OutlinedButton(
+                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 54), padding: const EdgeInsets.symmetric(horizontal: 24)),
+                onPressed: _pickFolder,
+                child: Text('Klasör seç', style: oaBody(17, weight: FontWeight.w600)),
               ),
               OutlinedButton(
                 style: OutlinedButton.styleFrom(minimumSize: const Size(0, 54), padding: const EdgeInsets.symmetric(horizontal: 24)),
@@ -391,6 +400,10 @@ class _DesktopHomeState extends State<DesktopHome> {
               )
             : Column(children: [a, const SizedBox(height: 20), b]);
       }),
+      if (sel.isPhone) ...[
+        const SizedBox(height: 20),
+        _notifCard(sel),
+      ],
       const SizedBox(height: 20),
       OACard(
         padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
@@ -410,6 +423,35 @@ class _DesktopHomeState extends State<DesktopHome> {
         ]),
       ),
     ]);
+  }
+
+  Widget _notifCard(Peer sel) {
+    final list = k.phoneNotifs.where((n) => n.peerId == sel.id).take(6).toList();
+    return OACard(
+      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        SectionHeader('Telefon bildirimleri',
+            action: list.isEmpty ? null : 'Temizle',
+            onAction: () {
+              for (final n in list) {
+                k.dismissNotif(n);
+              }
+            }),
+        if (list.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 4),
+            child: Text(
+              'Telefona gelen WhatsApp, SMS ve diğer bildirimler burada görünür; yanıt verilebilenlere buradan yanıt yazabilirsin. '
+              'Açmak için telefonda Pusula Köprü → Ayarlar → "Bildirimleri bilgisayara ilet".',
+              style: oaBody(15, color: OA.muted, height: 1.5),
+            ),
+          ),
+        for (final n in list) ...[
+          const Divider(),
+          NotifTile(n),
+        ],
+      ]),
+    );
   }
 
   Widget _clipCard() {
@@ -768,6 +810,16 @@ class _SettingsDialogState extends State<SettingsDialog> {
               Expanded(child: Text('Panoyu telefonla paylaş', style: oaBody(15, weight: FontWeight.w600))),
               Switch(value: k.clipShare, onChanged: k.setClipShare),
             ]),
+            Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('Windows açılınca başlat', style: oaBody(15, weight: FontWeight.w600)),
+                  Text('Pencereyi kapatınca saat yanındaki simgeye iner, gelenleri almaya devam eder.',
+                      style: oaBody(13, color: OA.muted)),
+                ]),
+              ),
+              Switch(value: k.autostart, onChanged: k.setAutostart),
+            ]),
             const SizedBox(height: 16),
             Text('Gelen dosyalar', style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
             const SizedBox(height: 6),
@@ -802,6 +854,93 @@ class _SettingsDialogState extends State<SettingsDialog> {
           child: const Text('Tamam'),
         ),
       ],
+    );
+  }
+}
+
+
+/// Telefondan gelen bir bildirim; yanıt verilebiliyorsa yanıt kutusu.
+class NotifTile extends StatefulWidget {
+  const NotifTile(this.n, {super.key});
+  final PhoneNotif n;
+
+  @override
+  State<NotifTile> createState() => _NotifTileState();
+}
+
+class _NotifTileState extends State<NotifTile> {
+  final _c = TextEditingController();
+  bool _open = false;
+  bool _busy = false;
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  Future<void> _send() async {
+    final t = _c.text.trim();
+    if (t.isEmpty) return;
+    setState(() => _busy = true);
+    final ok = await Kopru.i.replyNotif(widget.n, t);
+    if (!mounted) return;
+    setState(() {
+      _busy = false;
+      if (ok) {
+        _open = false;
+        _c.clear();
+      }
+    });
+    showSnack(context, ok ? 'Yanıt gönderildi' : 'Yanıt gönderilemedi');
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final n = widget.n;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          IconBox(Icons.notifications_none, size: 40, color: OA.text2, radius: 12),
+          const SizedBox(width: 14),
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${n.app} · ${timeAgo(n.at)}', style: oaBody(13, color: OA.muted)),
+              if (n.title.isNotEmpty) Text(n.title, style: oaBody(15, weight: FontWeight.w600)),
+              if (n.text.isNotEmpty)
+                Text(n.text, maxLines: 4, overflow: TextOverflow.ellipsis, style: oaBody(15, color: OA.text2, height: 1.4)),
+              if (n.replied != null) ...[
+                const SizedBox(height: 4),
+                Text('Yanıtın: ${n.replied}', style: oaBody(13, color: OA.green)),
+              ],
+            ]),
+          ),
+          if (n.canReply && !_open)
+            TextButton(onPressed: () => setState(() => _open = true), child: const Text('Yanıtla')),
+          IconButton(
+            tooltip: 'Kaldır',
+            onPressed: () => Kopru.i.dismissNotif(n),
+            icon: const Icon(Icons.close, size: 18, color: OA.muted),
+          ),
+        ]),
+        if (_open) ...[
+          const SizedBox(height: 10),
+          Row(children: [
+            Expanded(
+              child: TextField(
+                controller: _c,
+                autofocus: true,
+                style: oaBody(15),
+                onSubmitted: (_) => _send(),
+                decoration: const InputDecoration(hintText: 'Yanıt yaz'),
+              ),
+            ),
+            const SizedBox(width: 8),
+            FilledButton(onPressed: _busy ? null : _send, child: const Text('Gönder')),
+          ]),
+        ],
+      ]),
     );
   }
 }

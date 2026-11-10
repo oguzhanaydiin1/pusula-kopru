@@ -27,7 +27,7 @@ SolidCompression=yes
 WizardStyle=modern
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
-CloseApplications=yes
+CloseApplications=force
 RestartApplications=no
 
 [Languages]
@@ -35,15 +35,24 @@ Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"
-Name: "startup"; Description: "Windows açılınca başlat (telefondan gelenleri kaçırma)"; GroupDescription: "Başlangıç:"
 
 [Files]
 Source: "..\build\windows\x64\runner\Release\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
+[InstallDelete]
+; 0.1'deki başlangıç kısayolu: artık uygulama kendisi ayarlıyor (Ayarlar → Windows açılınca başlat)
+Type: files; Name: "{userstartup}\Pusula Köprü.lnk"
+
 [Icons]
 Name: "{autoprograms}\Pusula Köprü"; Filename: "{app}\{#AppExe}"
 Name: "{autodesktop}\Pusula Köprü"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
-Name: "{userstartup}\Pusula Köprü"; Filename: "{app}\{#AppExe}"; Tasks: startup
+
+[Registry]
+; Uygulama "Windows açılınca başlat" için bu değeri kendisi yazar; kaldırınca silinsin
+Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "PusulaKopru"; Flags: uninsdeletevalue dontcreatekey
+
+[UninstallRun]
+Filename: "{cmd}"; Parameters: "/c taskkill /im pusula_kopru.exe /f"; Flags: runhidden; RunOnceId: "KopruKapat"
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "{cm:LaunchProgram,Pusula Köprü}"; Flags: nowait postinstall skipifsilent
