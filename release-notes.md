@@ -1,5 +1,8 @@
 # Sürüm notları
 
+## 0.1.2
+- Android sürümü artık sabit OA anahtarıyla imzalı: bundan sonraki güncellemeler eskisinin üzerine kurulur. Bu sürümü kurmadan önce telefondaki eski sürümü bir kez kaldır.
+
 ## 0.1.1
 - Bağlantı hatalarında sunucunun daha sağlam davranması
 
