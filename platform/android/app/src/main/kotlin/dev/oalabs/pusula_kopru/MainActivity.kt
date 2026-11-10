@@ -70,7 +70,7 @@ class MainActivity : FlutterActivity() {
         // Pusula'dan "Bilgisayara gönder": Köprü ekranı açılmadan gönderip geri çekil
         // (uygulama zaten çalışıyorsa; soğuk açılışta ekran açık kalır ki motor hazırlansın)
         if (copy.getBooleanExtra("dev.oalabs.kopru.OPEN", false) && NativeBridge.isDartReady()) {
-            Toast.makeText(this, "Bilgisayara gönderiliyor", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, NativeBridge.t(this, "Bilgisayara gönderiliyor", "Sending to PC"), Toast.LENGTH_SHORT).show()
             finish()
         }
     }

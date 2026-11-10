@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:tray_manager/tray_manager.dart';
 import 'package:window_manager/window_manager.dart';
 
+import 'l10n.dart';
 import 'core/notifier.dart';
 
 /// Windows: pencere kapatılınca uygulama saat yanındaki simgeye (sistem tepsisi) iner ve
@@ -17,16 +18,16 @@ class DesktopHost with WindowListener, TrayListener {
     if (!Platform.isWindows) return;
     await windowManager.ensureInitialized();
     await windowManager.setPreventClose(true);
-    await windowManager.setMinimumSize(const Size(720, 560));
+    await windowManager.setMinimumSize(Size(720, 560));
     windowManager.addListener(this);
 
     try {
       await trayManager.setIcon('assets/icon/tray.ico');
       await trayManager.setToolTip('Pusula Köprü');
       await trayManager.setContextMenu(Menu(items: [
-        MenuItem(key: 'show', label: 'Pusula Köprü\'yü aç'),
+        MenuItem(key: 'show', label: L('Pusula Köprü\'yü aç')),
         MenuItem.separator(),
-        MenuItem(key: 'exit', label: 'Çıkış'),
+        MenuItem(key: 'exit', label: L('Çıkış')),
       ]));
       trayManager.addListener(this);
     } catch (_) {}
@@ -61,8 +62,8 @@ class DesktopHost with WindowListener, TrayListener {
     final prefs = await SharedPreferences.getInstance();
     if (prefs.getBool('trayHint') != true) {
       await prefs.setBool('trayHint', true);
-      await Notifier.show('Pusula Köprü arka planda çalışıyor',
-          'Telefonundan gelenleri almaya devam eder. Saat yanındaki köprü simgesinden açabilir ya da kapatabilirsin.',
+      await Notifier.show(L('Pusula Köprü arka planda çalışıyor'),
+          L('Telefonundan gelenleri almaya devam eder. Saat yanındaki köprü simgesinden açabilir ya da kapatabilirsin.'),
           always: true);
     }
   }

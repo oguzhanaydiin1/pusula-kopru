@@ -13,6 +13,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../updater.dart' show appVersion;
+import '../l10n.dart';
 import 'crypto.dart';
 import 'models.dart';
 import 'native.dart';
@@ -411,7 +412,7 @@ class Kopru extends ChangeNotifier {
     }
     final s = _server;
     if (s == null) {
-      startError = 'Bağlantı noktası açılamadı. Pusula Köprü başka bir pencerede açık olabilir.';
+      startError = L('Bağlantı noktası açılamadı. Pusula Köprü başka bir pencerede açık olabilir.');
       return;
     }
     s.idleTimeout = const Duration(seconds: 30);
@@ -582,10 +583,10 @@ class Kopru extends ChangeNotifier {
           } else if (await Native.isForeground()) {
             await Native.openInPusula(linkUrl(text));
           } else {
-            await Notifier.show('${peer.name}: bağlantı', 'Dokun, Pusula\'da aç · $text', url: linkUrl(text), always: true);
+            await Notifier.show(L('{0}: bağlantı', [peer.name]), L('Dokun, Pusula\'da aç · {0}', [text]), url: linkUrl(text), always: true);
           }
         } else {
-          await Notifier.show(link ? '${peer.name}: bağlantı' : '${peer.name}: metin', text,
+          await Notifier.show(link ? L('{0}: bağlantı', [peer.name]) : L('{0}: metin', [peer.name]), text,
               url: link ? linkUrl(text) : null);
         }
         _emit(KopruEvent('text', peer: peer, text: text));
@@ -646,8 +647,8 @@ class Kopru extends ChangeNotifier {
         final items = await Native.listMedia(m['kind']?.toString() ?? 'img', (m['offset'] as num?)?.toInt() ?? 0,
             ((m['limit'] as num?)?.toInt() ?? 60).clamp(1, 120));
         if (items == null) {
-          await Notifier.show('${peer.name} fotoğraflarına bakmak istiyor',
-              'Pusula Köprü\'yü açıp fotoğraflara erişim izni ver.', always: true);
+          await Notifier.show(L('{0} fotoğraflarına bakmak istiyor', [peer.name]),
+              L('Pusula Köprü\'yü açıp fotoğraflara erişim izni ver.'), always: true);
           return {'error': 'izin'};
         }
         return {'items': items};
@@ -972,18 +973,17 @@ class Kopru extends ChangeNotifier {
   Future<Peer> pairWithQr(String qr) async {
     final u = Uri.parse(qr.trim());
     if (u.scheme != 'pusulakopru' || u.host != 'pair') {
-      throw const KopruError('Bu bir Pusula Köprü kodu değil.');
+      throw KopruError(L('Bu bir Pusula Köprü kodu değil.'));
     }
     final q = u.queryParameters;
     final addrs = (q['a'] ?? '').split(',').where((e) => e.isNotEmpty).toList();
     final port = int.tryParse(q['port'] ?? '') ?? kPort;
     final pub = unb64u(q['k'] ?? '');
     final token = unb64u(q['t'] ?? '');
-    if (pub.length != 32 || token.length < 16 || addrs.isEmpty) throw const KopruError('Kod eksik okundu, tekrar dene.');
+    if (pub.length != 32 || token.length < 16 || addrs.isEmpty) throw KopruError(L('Kod eksik okundu, tekrar dene.'));
     final addr = await _firstReachable(addrs, port, const Duration(seconds: 4), expectId: q['id']);
     if (addr == null) {
-      throw const KopruError('Bilgisayara ulaşılamadı. İki cihaz da aynı Wi-Fi\'de mi? '
-          'Bilgisayarda Windows güvenlik duvarı sorduysa "İzin ver" de.');
+      throw KopruError(L('Bilgisayara ulaşılamadı. İki cihaz da aynı Wi-Fi\'de mi? Windows güvenlik duvarı sorduysa "İzin ver" de.'));
     }
     return _pairWith(addr, port, pub, token, 'qr');
   }
@@ -991,14 +991,14 @@ class Kopru extends ChangeNotifier {
   /// Telefon: yakındaki bilgisayarı seçip 6 haneli kodu girince.
   Future<Peer> pairWithCode(NearbyDevice d, String code) async {
     final c = code.replaceAll(RegExp(r'\D'), '');
-    if (c.length != 6) throw const KopruError('Kod 6 haneli olmalı.');
+    if (c.length != 6) throw KopruError(L('Kod 6 haneli olmalı.'));
     final http.Response r;
     try {
       r = await http.get(Uri.http('${d.address}:${d.port}', '/v1/pair/info')).timeout(const Duration(seconds: 4));
     } catch (_) {
-      throw const KopruError('Bilgisayara ulaşılamadı.');
+      throw KopruError(L('Bilgisayara ulaşılamadı.'));
     }
-    if (r.statusCode != 200) throw const KopruError('Bilgisayarda eşleştirme penceresi kapanmış.');
+    if (r.statusCode != 200) throw KopruError(L('Bilgisayarda eşleştirme penceresi kapanmış.'));
     final j = jsonDecode(utf8.decode(r.bodyBytes)) as Map;
     return _pairWith(d.address, d.port, unb64u(j['pub'] as String), Uint8List.fromList(utf8.encode(c)), 'code');
   }
@@ -1023,17 +1023,17 @@ class Kopru extends ChangeNotifier {
               }))
           .timeout(const Duration(seconds: 8));
     } catch (_) {
-      throw const KopruError('Bilgisayara ulaşılamadı.');
+      throw KopruError(L('Bilgisayara ulaşılamadı.'));
     }
     if (r.statusCode == 403) {
-      throw KopruError(mode == 'code' ? 'Kod yanlış. Bilgisayardaki kodu tekrar gir.' : 'Kod geçersiz, bilgisayarda yeni kod aç.');
+      throw KopruError(mode == 'code' ? L('Kod yanlış. Bilgisayardaki kodu tekrar gir.') : L('Kod geçersiz, bilgisayarda yeni kod aç.'));
     }
-    if (r.statusCode == 404) throw const KopruError('Bilgisayarda eşleştirme penceresi kapanmış.');
-    if (r.statusCode != 200) throw const KopruError('Eşleştirme başarısız oldu.');
+    if (r.statusCode == 404) throw KopruError(L('Bilgisayarda eşleştirme penceresi kapanmış.'));
+    if (r.statusCode != 200) throw KopruError(L('Eşleştirme başarısız oldu.'));
     final j = Map<String, dynamic>.from(jsonDecode(utf8.decode(r.bodyBytes)) as Map);
     final expected = await PairCrypto.proof(auth, 'kopru-pair-2', serverPub, pub);
     if (!sameBytes(expected, unb64u(j['proof'] as String))) {
-      throw const KopruError('Bilgisayar doğrulanamadı; eşleştirme durduruldu.');
+      throw KopruError(L('Bilgisayar doğrulanamadı; eşleştirme durduruldu.'));
     }
     final key = await PairCrypto.derive(kp, serverPub, auth);
     final id = j['id'].toString();
@@ -1157,7 +1157,7 @@ class Kopru extends ChangeNotifier {
     if (t.isEmpty) return null;
     final ok = await _send(p, {'t': 'clip', 'text': t.length > 100000 ? t.substring(0, 100000) : t}) != null;
     if (ok) {
-      _addClip(t, 'Bu telefon');
+      _addClip(t, L('Bu telefon'));
       await _addHistory(HistoryItem(
           kind: looksLikeLink(t) ? 'link' : 'text', name: t, incoming: false, peerName: p.name, at: DateTime.now()));
     }
@@ -1297,10 +1297,10 @@ class Kopru extends ChangeNotifier {
   /// Telefon: son ekran görüntüsünü gönderir. null: gönderildi (toplu kimlik döner)
   Future<(String?, String?)> sendLatestScreenshot(Peer p) async {
     final r = await Native.latestScreenshot();
-    if (r == null) return (null, 'Ekran görüntüsü okunamadı');
-    if (r['permission'] == true) return (null, 'Fotoğraflara erişim izni ver, sonra tekrar dene');
+    if (r == null) return (null, L('Ekran görüntüsü okunamadı'));
+    if (r['permission'] == true) return (null, L('Fotoğraflara erişim izni ver, sonra tekrar dene'));
     final path = r['path']?.toString();
-    if (path == null) return (null, 'Ekran görüntüsü bulunamadı');
+    if (path == null) return (null, L('Ekran görüntüsü bulunamadı'));
     return (sendFiles(p, [path]), null);
   }
 
@@ -1347,7 +1347,7 @@ class Kopru extends ChangeNotifier {
     }
     myClip = t;
     myClipAt = DateTime.now();
-    _addClip(t, 'Bu bilgisayar');
+    _addClip(t, L('Bu bilgisayar'));
     notifyListeners();
     if (!clipShare) return;
     final text = t.length > 100000 ? t.substring(0, 100000) : t;
@@ -1472,8 +1472,8 @@ class Kopru extends ChangeNotifier {
     final answer = Completer<bool>();
     _offerAnswers[offer.id] = answer;
     _emit(KopruEvent('nearOffer', offer: offer));
-    await Notifier.show('${offer.name} dosya göndermek istiyor',
-        '${offer.files.length} öğe · ${formatSize(offer.total)}. Kabul etmek için Pusula Köprü\'yü aç.',
+    await Notifier.show(L('{0} dosya göndermek istiyor', [offer.name]),
+        L('{0} öğe · {1}. Kabul etmek için Pusula Köprü\'yü aç.', [offer.files.length, formatSize(offer.total)]),
         always: true);
     bool ok;
     try {
@@ -1518,13 +1518,13 @@ class Kopru extends ChangeNotifier {
   Future<String?> sendNearby(NearbyDevice d, List<String> paths,
       {void Function(String sas)? onSas, void Function(String batch)? onStart}) async {
     final pub = d.pub;
-    if (pub == null) return 'Cihaz artık görünür değil';
+    if (pub == null) return L('Cihaz artık görünür değil');
     final files = <File>[];
     for (final path in paths) {
       final type = FileSystemEntity.typeSync(path);
       if (type == FileSystemEntityType.file) files.add(File(path));
     }
-    if (files.isEmpty) return 'Gönderilecek dosya yok';
+    if (files.isEmpty) return L('Gönderilecek dosya yok');
     final kp = await PairCrypto.newKeyPair();
     final myPub = await PairCrypto.publicBytes(kp);
     final key = PairKey(await PairCrypto.derive(kp, pub, utf8.encode('kopru-yakin')));
@@ -1544,11 +1544,11 @@ class Kopru extends ChangeNotifier {
               }))
           .timeout(const Duration(seconds: 100));
     } catch (_) {
-      return '${d.name} yanıt vermedi';
+      return L('{0} yanıt vermedi', [d.name]);
     }
-    if (r.statusCode != 200) return '${d.name} şu an almıyor';
+    if (r.statusCode != 200) return L('{0} şu an almıyor', [d.name]);
     final j = jsonDecode(utf8.decode(r.bodyBytes));
-    if (j is! Map || j['ok'] != true) return '${d.name} reddetti';
+    if (j is! Map || j['ok'] != true) return L('{0} reddetti', [d.name]);
     final offer = j['offer'].toString();
     final temp = Peer(id: 'yakin:${d.id}', name: d.name, platform: d.platform, key: key, addrs: [d.address], port: d.port);
     final batch = b64u(randomBytes(6));
@@ -1797,7 +1797,7 @@ class Kopru extends ChangeNotifier {
   Future<void> _sendFileRelay(Peer p, File f, ActiveTransfer t, RelayLink link) async {
     if (t.size > kRelayMax) {
       t.state = 'failed';
-      _emit(KopruEvent('error', peer: p, text: 'İnternet üzerinden en fazla 100 MB gönderilebilir. ${p.name} ile aynı Wi-Fi\'ye bağlan.'));
+      _emit(KopruEvent('error', peer: p, text: L('İnternet üzerinden en fazla 100 MB gönderilebilir. {0} ile aynı Wi-Fi\'ye bağlan.', [p.name])));
       return;
     }
     t.viaRelay = true;
@@ -2117,7 +2117,7 @@ class Kopru extends ChangeNotifier {
     _recvTimer?.cancel();
     _recvTimer = Timer(const Duration(milliseconds: 1500), () {
       final n = _recvNames.length;
-      final title = n == 1 ? '${peer.name} gönderdi' : '${peer.name}: $n öğe geldi';
+      final title = n == 1 ? L('{0} gönderdi', [peer.name]) : L('{0}: {1} öğe geldi', [peer.name, n]);
       final body = n == 1 ? _recvNames.first : _recvNames.take(3).join(', ') + (n > 3 ? '…' : '');
       final loc = _recvLoc;
       final single = n == 1 && !_recvNames.first.endsWith('/');

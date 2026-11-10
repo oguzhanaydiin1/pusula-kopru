@@ -140,6 +140,11 @@ object NativeBridge {
                     val name = call.argument<String>("name") ?: "dosya"
                     bg(result) { MediaAccess.copy(app, id, name) }
                 }
+                "setLang" -> {
+                    app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("lang", call.argument<String>("lang") ?: "tr").apply()
+                    KopruService.channels(app)
+                    result.success(true)
+                }
                 "captureVolume" -> { captureVolume = call.argument<Boolean>("on") == true; result.success(true) }
                 "mirrorAvailable" -> result.success(
                     try {
@@ -169,6 +174,14 @@ object NativeBridge {
     }
 
     fun isDartReady(): Boolean = dartReady
+
+    /** Uygulama dili İngilizce mi (Dart tarafı bildirir; ilk açılışta cihaz dili) */
+    fun en(c: Context): Boolean {
+        val l = c.getSharedPreferences(PREFS, Context.MODE_PRIVATE).getString("lang", null)
+        return if (l != null) l == "en" else !java.util.Locale.getDefault().language.equals("tr", ignoreCase = true)
+    }
+
+    fun t(c: Context, tr: String, en: String) = if (en(c)) en else tr
 
     /** Sunum kumandasında ses tuşları slayt geçsin */
     var captureVolume = false
@@ -466,10 +479,10 @@ object NativeBridge {
             val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(app, KopruService.CH_RING) else @Suppress("DEPRECATION") Notification.Builder(app)
             @Suppress("DEPRECATION")
             val n = b.setSmallIcon(R.drawable.ic_stat_kopru)
-                .setContentTitle("Telefonun burada")
-                .setContentText("$from seni arıyor")
+                .setContentTitle(t(app, "Telefonun burada", "Your phone is here"))
+                .setContentText(t(app, "$from seni arıyor", "$from is looking for you"))
                 .setContentIntent(stop)
-                .addAction(Notification.Action.Builder(null, "Durdur", stop).build())
+                .addAction(Notification.Action.Builder(null, t(app, "Durdur", "Stop"), stop).build())
                 .setDeleteIntent(stop)
                 .setCategory(Notification.CATEGORY_ALARM)
                 .setPriority(Notification.PRIORITY_MAX)

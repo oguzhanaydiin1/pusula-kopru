@@ -5,6 +5,9 @@
 #define AppExe "pusula_kopru.exe"
 
 [Setup]
+; Windows dili Türkçe değilse kurulum İngilizce
+ShowLanguageDialog=auto
+LanguageDetectionMethod=uilanguage
 AppId={{8C1F4E2A-6B3D-4A57-9E21-3F5D7C9A0B14}
 AppName=Pusula Köprü
 AppVersion={#AppVersion}
@@ -32,6 +35,7 @@ RestartApplications=no
 
 [Languages]
 Name: "turkish"; MessagesFile: "compiler:Languages\Turkish.isl"
+Name: "english"; MessagesFile: "compiler:Default.isl"
 
 [Tasks]
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"

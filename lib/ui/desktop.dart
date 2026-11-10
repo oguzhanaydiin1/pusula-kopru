@@ -6,6 +6,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 
+import '../l10n.dart';
 import '../core/models.dart';
 import '../core/node.dart';
 import '../core/notifier.dart';
@@ -16,7 +17,7 @@ import 'widgets.dart';
 
 /// Bilgisayar ana penceresi (taslaktaki "Bilgisayar — ana pencere").
 class DesktopHome extends StatefulWidget {
-  const DesktopHome({super.key});
+  DesktopHome({super.key});
 
   @override
   State<DesktopHome> createState() => _DesktopHomeState();
@@ -37,7 +38,7 @@ class _DesktopHomeState extends State<DesktopHome> {
     updateAvailable.addListener(_onUpdate);
     Updater.check();
     // Uygulama günlerce açık kalabilir: 6 saatte bir yeni sürüme bak
-    _updateTimer = Timer.periodic(const Duration(hours: 6), (_) => Updater.check());
+    _updateTimer = Timer.periodic(Duration(hours: 6), (_) => Updater.check());
   }
 
   void _onUpdate() {
@@ -56,17 +57,17 @@ class _DesktopHomeState extends State<DesktopHome> {
     if (!mounted) return;
     switch (e.type) {
       case 'paired':
-        showSnack(context, '${e.peer?.name ?? 'Cihaz'} eşleşti');
+        showSnack(context, L('{0} eşleşti', [e.peer?.name ?? L('Cihaz')]));
       case 'text':
-        showSnack(context, '${e.peer?.name ?? 'Telefon'}: yeni ${looksLikeLink(e.text ?? '') ? 'bağlantı' : 'metin'}');
+        showSnack(context, L('{0}: yeni {1}', [e.peer?.name ?? L('Telefon'), looksLikeLink(e.text ?? '') ? L('bağlantı') : L('metin')]));
       case 'clipCopied':
-        showSnack(context, 'Telefonun panosu kopyalandı, yapıştırabilirsin');
+        showSnack(context, L('Telefonun panosu kopyalandı, yapıştırabilirsin'));
       case 'received':
-        showSnack(context, '${e.text} geldi · İndirilenler\\Pusula Köprü');
+        showSnack(context, L('{0} geldi · İndirilenler\\Pusula Köprü', [e.text]));
       case 'unpaired':
-        showSnack(context, '${e.peer?.name ?? 'Cihaz'} eşleşmeyi kaldırdı');
+        showSnack(context, L('{0} eşleşmeyi kaldırdı', [e.peer?.name ?? L('Cihaz')]));
       case 'error':
-        showSnack(context, e.text ?? 'Bir sorun oldu');
+        showSnack(context, e.text ?? L('Bir sorun oldu'));
       case 'nearOffer':
         if (e.offer != null) {
           Notifier.showWindow?.call();
@@ -79,14 +80,14 @@ class _DesktopHomeState extends State<DesktopHome> {
     final p = k.selected;
     if (p == null) return;
     final r = await FilePicker.platform.pickFiles(allowMultiple: true);
-    final paths = r?.files.map((f) => f.path).whereType<String>().toList() ?? const <String>[];
+    final paths = r?.files.map((f) => f.path).whereType<String>().toList() ?? <String>[];
     if (paths.isNotEmpty) k.sendFiles(p, paths);
   }
 
   void _dropped(List<String> paths) {
     final p = k.selected;
     if (p == null) {
-      showSnack(context, 'Önce bir telefon eşleştir');
+      showSnack(context, L('Önce bir telefon eşleştir'));
       return;
     }
     if (paths.isNotEmpty) k.sendFiles(p, paths);
@@ -95,7 +96,7 @@ class _DesktopHomeState extends State<DesktopHome> {
   Future<void> _pickFolder() async {
     final p = k.selected;
     if (p == null) return;
-    final dir = await FilePicker.platform.getDirectoryPath(dialogTitle: 'Gönderilecek klasör');
+    final dir = await FilePicker.platform.getDirectoryPath(dialogTitle: L('Gönderilecek klasör'));
     if (dir != null) k.sendFiles(p, [dir]);
   }
 
@@ -106,7 +107,7 @@ class _DesktopHomeState extends State<DesktopHome> {
     if (text == null || text.trim().isEmpty) return;
     final ok = await k.sendText(p, text);
     if (mounted) {
-      showSnack(context, ok ? (p.online ? 'Gönderildi' : 'Gönderildi; ${p.name} bağlanınca iletilecek') : '${p.name} bağlı değil');
+      showSnack(context, ok ? (p.online ? L('Gönderildi') : L('Gönderildi; {0} bağlanınca iletilecek', [p.name])) : L('{0} bağlı değil', [p.name]));
     }
   }
 
@@ -114,21 +115,21 @@ class _DesktopHomeState extends State<DesktopHome> {
     final ok = await k.ring(p);
     if (!mounted) return;
     if (!ok) {
-      showSnack(context, 'Telefona ulaşılamadı. Pusula Köprü telefonda açık mı?');
+      showSnack(context, L('Telefona ulaşılamadı. Pusula Köprü telefonda açık mı?'));
       return;
     }
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: Text('Telefon çalıyor', style: oaDisplay(22)),
-        content: Text('${p.name} sessizdeyse bile 30 saniye çalar.', style: oaBody(15, color: OA.text2)),
+        title: Text(L('Telefon çalıyor'), style: oaDisplay(22)),
+        content: Text(L('{0} sessizdeyse bile 30 saniye çalar.', [p.name]), style: oaBody(15, color: OA.text2)),
         actions: [
           FilledButton(
             onPressed: () {
               k.stopRemoteRing(p);
               Navigator.pop(ctx);
             },
-            child: const Text('Durdur'),
+            child: Text(L('Durdur')),
           ),
         ],
       ),
@@ -138,25 +139,25 @@ class _DesktopHomeState extends State<DesktopHome> {
   Future<void> _nearbyDialog() => showDialog(
         context: context,
         builder: (ctx) => AlertDialog(
-          title: Text('Yakındakiler', style: oaDisplay(24)),
+          title: Text(L('Yakındakiler'), style: oaDisplay(24)),
           content: SizedBox(
             width: 480,
             child: SingleChildScrollView(
               child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-                Text('Eşleştirmeden, aynı Wi-Fi\'deki birine tek seferlik dosya gönder ya da al. '
-                    'Karşı taraf her gönderimi onaylar; dosyalar şifreli gider.',
+                Text(L('Eşleştirmeden, aynı Wi-Fi\'deki birine tek seferlik dosya gönder ya da al. ')
+                    L('Karşı taraf her gönderimi onaylar; dosyalar şifreli gider.'),
                     style: oaBody(15, color: OA.text2, height: 1.5)),
-                const SizedBox(height: 16),
-                const NearbyPanel(),
+                SizedBox(height: 16),
+                NearbyPanel(),
               ]),
             ),
           ),
-          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: const Text('Kapat'))],
+          actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(L('Kapat')))],
         ),
       );
 
   Future<void> _pair() async {
-    await showDialog(context: context, barrierDismissible: false, builder: (_) => const PairDialog());
+    await showDialog(context: context, barrierDismissible: false, builder: (_) => PairDialog());
   }
 
   Future<void> _install() async {
@@ -171,7 +172,7 @@ class _DesktopHomeState extends State<DesktopHome> {
       exit(0);
     } else {
       setState(() => _updateProgress = null);
-      showSnack(context, 'Güncelleme indirilemedi');
+      showSnack(context, L('Güncelleme indirilemedi'));
     }
   }
 
@@ -188,7 +189,7 @@ class _DesktopHomeState extends State<DesktopHome> {
               Container(
                 width: double.infinity,
                 color: OA.surface2,
-                padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 10),
+                padding: EdgeInsets.symmetric(horizontal: 24, vertical: 10),
                 child: Text(k.startError!, style: oaBody(14, color: OA.danger)),
               ),
             Expanded(
@@ -199,12 +200,12 @@ class _DesktopHomeState extends State<DesktopHome> {
                       final side = _sidebar(sel);
                       final main = _main(sel!);
                       return SingleChildScrollView(
-                        padding: const EdgeInsets.all(24),
+                        padding: EdgeInsets.all(24),
                         child: narrow
-                            ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [side, const SizedBox(height: 24), main])
+                            ? Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [side, SizedBox(height: 24), main])
                             : Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
                                 SizedBox(width: 320, child: side),
-                                const SizedBox(width: 24),
+                                SizedBox(width: 24),
                                 Expanded(child: main),
                               ]),
                       );
@@ -220,31 +221,31 @@ class _DesktopHomeState extends State<DesktopHome> {
     final online = sel?.online == true;
     return Container(
       height: 64,
-      padding: const EdgeInsets.symmetric(horizontal: 24),
-      decoration: const BoxDecoration(border: Border(bottom: BorderSide(color: OA.line))),
+      padding: EdgeInsets.symmetric(horizontal: 24),
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: OA.line))),
       child: Row(children: [
-        const OALogo(),
-        const Spacer(),
+        OALogo(),
+        Spacer(),
         if (_update != null) ...[
           _updateProgress == null
-              ? FilledButton(onPressed: _install, child: Text('Güncelle: ${_update!.version}'))
+              ? FilledButton(onPressed: _install, child: Text(L('Güncelle: {0}', [_update!.version])))
               : SizedBox(
                   width: 160,
                   child: LinearProgressIndicator(value: _updateProgress, minHeight: 6, borderRadius: BorderRadius.circular(9))),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
         ],
         if (sel != null)
           OAChip(
             label: online
-                ? (k.viaRelay(sel) ? 'İnternet üzerinden · şifreli' : 'Aynı Wi-Fi · doğrudan bağlantı')
-                : '${sel.name} bağlı değil',
+                ? (k.viaRelay(sel) ? L('İnternet üzerinden · şifreli') : L('Aynı Wi-Fi · doğrudan bağlantı'))
+                : L('{0} bağlı değil', [sel.name]),
             dot: online ? OA.green : OA.faint,
           ),
-        const SizedBox(width: 12),
+        SizedBox(width: 12),
         _RoundIconButton(
           icon: Icons.settings_outlined,
-          tooltip: 'Ayarlar',
-          onPressed: () => showDialog(context: context, builder: (_) => const SettingsDialog()),
+          tooltip: L('Ayarlar'),
+          onPressed: () => showDialog(context: context, builder: (_) => SettingsDialog()),
         ),
       ]),
     );
@@ -253,32 +254,32 @@ class _DesktopHomeState extends State<DesktopHome> {
   Widget _empty() {
     return Center(
       child: SingleChildScrollView(
-        padding: const EdgeInsets.all(24),
+        padding: EdgeInsets.all(24),
         child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 520),
+          constraints: BoxConstraints(maxWidth: 520),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
-            const IconBox(Icons.smartphone_outlined, size: 72, radius: 22),
-            const SizedBox(height: 20),
-            Text('Telefonunu bağla', textAlign: TextAlign.center, style: oaDisplay(34)),
-            const SizedBox(height: 12),
+            IconBox(Icons.smartphone_outlined, size: 72, radius: 22),
+            SizedBox(height: 20),
+            Text(L('Telefonunu bağla'), textAlign: TextAlign.center, style: oaDisplay(34)),
+            SizedBox(height: 12),
             Text(
-              'Telefona Pusula Köprü\'yü kur, aynı Wi-Fi\'ye bağlan ve bilgisayardaki QR kodu okut. '
-              'Sonra dosyalar, bağlantılar ve pano iki cihaz arasında doğrudan ve şifreli gider.',
+              L('Telefona Pusula Köprü\'yü kur, aynı Wi-Fi\'ye bağlan ve bilgisayardaki QR kodu okut. ')
+              L('Sonra dosyalar, bağlantılar ve pano iki cihaz arasında doğrudan ve şifreli gider.'),
               textAlign: TextAlign.center,
               style: oaBody(17, color: OA.text2, height: 1.6),
             ),
-            const SizedBox(height: 28),
+            SizedBox(height: 28),
             FilledButton.icon(
-              style: FilledButton.styleFrom(minimumSize: const Size(0, 54), padding: const EdgeInsets.symmetric(horizontal: 28)),
+              style: FilledButton.styleFrom(minimumSize: Size(0, 54), padding: EdgeInsets.symmetric(horizontal: 28)),
               onPressed: _pair,
-              icon: const Icon(Icons.qr_code_2),
-              label: Text('QR kodu göster', style: oaBody(17, color: OA.amberInk, weight: FontWeight.w600)),
+              icon: Icon(Icons.qr_code_2),
+              label: Text(L('QR kodu göster'), style: oaBody(17, color: OA.amberInk, weight: FontWeight.w600)),
             ),
-            const SizedBox(height: 12),
+            SizedBox(height: 12),
             TextButton.icon(
               onPressed: _nearbyDialog,
-              icon: const Icon(Icons.wifi_tethering),
-              label: const Text('Eşleştirmeden yakındakine gönder ya da al'),
+              icon: Icon(Icons.wifi_tethering),
+              label: Text(L('Eşleştirmeden yakındakine gönder ya da al')),
             ),
           ]),
         ),
@@ -288,31 +289,31 @@ class _DesktopHomeState extends State<DesktopHome> {
 
   Widget _sidebar(Peer? sel) {
     return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      Text('Cihazlarım', style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
-      const SizedBox(height: 12),
+      Text(L('Cihazlarım'), style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
+      SizedBox(height: 12),
       for (final p in k.peers) ...[
         p.id == sel?.id ? _selectedCard(p) : _peerRow(p),
-        const SizedBox(height: 12),
+        SizedBox(height: 12),
       ],
       OutlinedButton.icon(
-        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 54), foregroundColor: OA.text2),
+        style: OutlinedButton.styleFrom(minimumSize: Size(0, 54), foregroundColor: OA.text2),
         onPressed: _pair,
-        icon: const Icon(Icons.add, size: 20),
-        label: const Text('Yeni cihaz eşleştir'),
+        icon: Icon(Icons.add, size: 20),
+        label: Text(L('Yeni cihaz eşleştir')),
       ),
-      const SizedBox(height: 10),
+      SizedBox(height: 10),
       OutlinedButton.icon(
-        style: OutlinedButton.styleFrom(minimumSize: const Size(0, 50), foregroundColor: k.isVisible ? OA.amber : OA.text2),
+        style: OutlinedButton.styleFrom(minimumSize: Size(0, 50), foregroundColor: k.isVisible ? OA.amber : OA.text2),
         onPressed: _nearbyDialog,
-        icon: const Icon(Icons.wifi_tethering, size: 20),
-        label: Text(k.isVisible ? 'Yakındakilere görünürsün' : 'Yakındakiler'),
+        icon: Icon(Icons.wifi_tethering, size: 20),
+        label: Text(k.isVisible ? L('Yakındakilere görünürsün') : L('Yakındakiler')),
       ),
     ]);
   }
 
   Widget _peerMenu(Peer p) => PopupMenuButton<String>(
-        tooltip: 'Seçenekler',
-        icon: const Icon(Icons.more_horiz, color: OA.muted),
+        tooltip: L('Seçenekler'),
+        icon: Icon(Icons.more_horiz, color: OA.muted),
         color: OA.surface2,
         onSelected: (v) async {
           if (v == 'remove') {
@@ -321,7 +322,7 @@ class _DesktopHomeState extends State<DesktopHome> {
           }
         },
         itemBuilder: (_) => [
-          PopupMenuItem(value: 'remove', child: Text('Eşleşmeyi kaldır', style: oaBody(15, color: OA.danger))),
+          PopupMenuItem(value: 'remove', child: Text(L('Eşleşmeyi kaldır'), style: oaBody(15, color: OA.danger))),
         ],
       );
 
@@ -331,48 +332,48 @@ class _DesktopHomeState extends State<DesktopHome> {
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
           IconBox(peerIcon(p)),
-          const SizedBox(width: 12),
+          SizedBox(width: 12),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: oaDisplay(18)),
-              const SizedBox(height: 2),
+              SizedBox(height: 2),
               Text(peerStatus(p),
                   style: oaBody(13, color: p.online ? OA.green : OA.muted, weight: FontWeight.w600)),
             ]),
           ),
           _peerMenu(p),
         ]),
-        const SizedBox(height: 16),
+        SizedBox(height: 16),
         Wrap(spacing: 8, runSpacing: 8, children: [
           if (p.battery != null)
             OAChip(
               icon: p.charging ? Icons.battery_charging_full : Icons.battery_std_outlined,
-              label: 'Pil %${p.battery}${p.charging ? ' · şarjda' : ''}',
+              label: L('Pil %{0}{1}', [p.battery, p.charging ? L(' · şarjda') : '']),
             ),
           OAChip(label: p.isPhone ? 'Android' : 'Windows'),
         ]),
         if (p.isPhone) ...[
-          const SizedBox(height: 16),
+          SizedBox(height: 16),
           OutlinedButton.icon(
             onPressed: () => _ring(p),
-            icon: const Icon(Icons.notifications_active_outlined, size: 18),
-            label: const Text('Telefonu çaldır'),
+            icon: Icon(Icons.notifications_active_outlined, size: 18),
+            label: Text(L('Telefonu çaldır')),
           ),
-          const SizedBox(height: 8),
+          SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: () => showDialog(context: context, builder: (_) => PhoneFilesDialog(peer: p)),
-            icon: const Icon(Icons.photo_library_outlined, size: 18),
-            label: const Text('Telefonun dosyaları'),
+            icon: Icon(Icons.photo_library_outlined, size: 18),
+            label: Text(L('Telefonun dosyaları')),
           ),
           if ((k.backupReceived[p.id] ?? 0) > 0) ...[
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             InkWell(
               onTap: () => openFolder(k.backupFolder(p)),
               child: Row(children: [
-                const Icon(Icons.backup_outlined, size: 16, color: OA.green),
-                const SizedBox(width: 8),
+                Icon(Icons.backup_outlined, size: 16, color: OA.green),
+                SizedBox(width: 8),
                 Expanded(
-                  child: Text('Fotoğraf yedeği: ${k.backupReceived[p.id]} öğe · klasörü aç',
+                  child: Text(L('Fotoğraf yedeği: {0} öğe · klasörü aç', [k.backupReceived[p.id]]),
                       style: oaBody(13, color: OA.text2)),
                 ),
               ]),
@@ -385,11 +386,11 @@ class _DesktopHomeState extends State<DesktopHome> {
 
   Widget _peerRow(Peer p) {
     return OACard(
-      padding: const EdgeInsets.fromLTRB(20, 12, 8, 12),
+      padding: EdgeInsets.fromLTRB(20, 12, 8, 12),
       onTap: () => k.selectedPeer = p,
       child: Row(children: [
         IconBox(peerIcon(p), color: OA.muted),
-        const SizedBox(width: 12),
+        SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text(p.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: oaBody(15, weight: FontWeight.w600)),
@@ -412,57 +413,57 @@ class _DesktopHomeState extends State<DesktopHome> {
           _dropped(d.files.map((f) => f.path).toList());
         },
         child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 40),
+          duration: Duration(milliseconds: 150),
+          padding: EdgeInsets.symmetric(horizontal: 24, vertical: 40),
           decoration: BoxDecoration(
             color: _dragging ? OA.surface2 : OA.bg2,
             borderRadius: BorderRadius.circular(24),
             border: Border.all(color: _dragging ? OA.amber : OA.border2, width: 2),
           ),
           child: Column(children: [
-            const IconBox(Icons.upload_outlined, size: 64, radius: 20),
-            const SizedBox(height: 16),
-            Text(sel.isPhone ? 'Telefona göndermek için buraya bırak' : '${sel.name} cihazına göndermek için buraya bırak',
+            IconBox(Icons.upload_outlined, size: 64, radius: 20),
+            SizedBox(height: 16),
+            Text(sel.isPhone ? L('Telefona göndermek için buraya bırak') : L('{0} cihazına göndermek için buraya bırak', [sel.name]),
                 textAlign: TextAlign.center, style: oaDisplay(30)),
-            const SizedBox(height: 10),
+            SizedBox(height: 10),
             Text(
                 k.viaRelay(sel)
-                    ? 'Farklı ağdasınız: internet üzerinden, uçtan uca şifreli gider (dosya başına en fazla 100 MB).'
-                    : 'Dosya, fotoğraf ya da klasör. Aynı Wi-Fi\'deyken doğrudan ve şifreli gider.',
+                    ? L('Farklı ağdasınız: internet üzerinden, uçtan uca şifreli gider (dosya başına en fazla 100 MB).')
+                    : L('Dosya, fotoğraf ya da klasör. Aynı Wi-Fi\'deyken doğrudan ve şifreli gider.'),
                 textAlign: TextAlign.center, style: oaBody(17, color: OA.text2)),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Wrap(alignment: WrapAlignment.center, spacing: 12, runSpacing: 12, children: [
               FilledButton(
-                style: FilledButton.styleFrom(minimumSize: const Size(0, 54), padding: const EdgeInsets.symmetric(horizontal: 28)),
+                style: FilledButton.styleFrom(minimumSize: Size(0, 54), padding: EdgeInsets.symmetric(horizontal: 28)),
                 onPressed: _pickFiles,
-                child: Text('Dosya seç', style: oaBody(17, color: OA.amberInk, weight: FontWeight.w600)),
+                child: Text(L('Dosya seç'), style: oaBody(17, color: OA.amberInk, weight: FontWeight.w600)),
               ),
               OutlinedButton(
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 54), padding: const EdgeInsets.symmetric(horizontal: 24)),
+                style: OutlinedButton.styleFrom(minimumSize: Size(0, 54), padding: EdgeInsets.symmetric(horizontal: 24)),
                 onPressed: _pickFolder,
-                child: Text('Klasör seç', style: oaBody(17, weight: FontWeight.w600)),
+                child: Text(L('Klasör seç'), style: oaBody(17, weight: FontWeight.w600)),
               ),
               OutlinedButton(
-                style: OutlinedButton.styleFrom(minimumSize: const Size(0, 54), padding: const EdgeInsets.symmetric(horizontal: 24)),
+                style: OutlinedButton.styleFrom(minimumSize: Size(0, 54), padding: EdgeInsets.symmetric(horizontal: 24)),
                 onPressed: _sendText,
-                child: Text('Metin ya da bağlantı gönder', style: oaBody(17, weight: FontWeight.w600)),
+                child: Text(L('Metin ya da bağlantı gönder'), style: oaBody(17, weight: FontWeight.w600)),
               ),
             ]),
           ]),
         ),
       ),
       if (transfers.isNotEmpty) ...[
-        const SizedBox(height: 20),
+        SizedBox(height: 20),
         OACard(
-          padding: const EdgeInsets.fromLTRB(24, 16, 24, 8),
+          padding: EdgeInsets.fromLTRB(24, 16, 24, 8),
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('Aktarımlar', style: oaDisplay(20)),
-            const SizedBox(height: 8),
+            Text(L('Aktarımlar'), style: oaDisplay(20)),
+            SizedBox(height: 8),
             for (final t in transfers) TransferRow(t),
           ]),
         ),
       ],
-      const SizedBox(height: 20),
+      SizedBox(height: 20),
       LayoutBuilder(builder: (context, c) {
         final two = c.maxWidth >= 560;
         final a = _clipCard();
@@ -471,30 +472,30 @@ class _DesktopHomeState extends State<DesktopHome> {
             ? IntrinsicHeight(
                 child: Row(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
                   Expanded(child: a),
-                  const SizedBox(width: 20),
+                  SizedBox(width: 20),
                   Expanded(child: b),
                 ]),
               )
-            : Column(children: [a, const SizedBox(height: 20), b]);
+            : Column(children: [a, SizedBox(height: 20), b]);
       }),
       if (sel.isPhone && k.phoneNotifs.any((n) => n.peerId == sel.id)) ...[
-        const SizedBox(height: 20),
+        SizedBox(height: 20),
         _notifCard(sel),
       ],
-      const SizedBox(height: 20),
+      SizedBox(height: 20),
       OACard(
-        padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
+        padding: EdgeInsets.fromLTRB(24, 8, 24, 8),
         child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-          SectionHeader('Son aktarımlar',
-              action: k.history.isEmpty ? null : 'Tümü',
-              onAction: () => showDialog(context: context, builder: (_) => const HistoryDialog())),
+          SectionHeader(L('Son aktarımlar'),
+              action: k.history.isEmpty ? null : L('Tümü'),
+              onAction: () => showDialog(context: context, builder: (_) => HistoryDialog())),
           if (k.history.isEmpty)
             Padding(
-              padding: const EdgeInsets.only(bottom: 16, top: 4),
-              child: Text('Henüz bir şey gönderilmedi.', style: oaBody(15, color: OA.muted)),
+              padding: EdgeInsets.only(bottom: 16, top: 4),
+              child: Text(L('Henüz bir şey gönderilmedi.'), style: oaBody(15, color: OA.muted)),
             ),
           for (final h in k.history.take(5)) ...[
-            const Divider(),
+            Divider(),
             HistoryTile(h),
           ],
         ]),
@@ -505,10 +506,10 @@ class _DesktopHomeState extends State<DesktopHome> {
   Widget _notifCard(Peer sel) {
     final list = k.phoneNotifs.where((n) => n.peerId == sel.id).take(6).toList();
     return OACard(
-      padding: const EdgeInsets.fromLTRB(24, 16, 24, 16),
+      padding: EdgeInsets.fromLTRB(24, 16, 24, 16),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        SectionHeader('Telefon bildirimleri',
-            action: list.isEmpty ? null : 'Temizle',
+        SectionHeader(L('Telefon bildirimleri'),
+            action: list.isEmpty ? null : L('Temizle'),
             onAction: () {
               for (final n in list) {
                 k.dismissNotif(n);
@@ -516,15 +517,15 @@ class _DesktopHomeState extends State<DesktopHome> {
             }),
         if (list.isEmpty)
           Padding(
-            padding: const EdgeInsets.only(top: 4, bottom: 4),
+            padding: EdgeInsets.only(top: 4, bottom: 4),
             child: Text(
-              'Telefona gelen WhatsApp, SMS ve diğer bildirimler burada görünür; yanıt verilebilenlere buradan yanıt yazabilirsin. '
-              'Açmak için telefonda Pusula Köprü → Ayarlar → "Bildirimleri bilgisayara ilet".',
+              L('Telefona gelen WhatsApp, SMS ve diğer bildirimler burada görünür; yanıt verilebilenlere buradan yanıt yazabilirsin. ')
+              L('Açmak için telefonda Pusula Köprü → Ayarlar → "Bildirimleri bilgisayara ilet".'),
               style: oaBody(15, color: OA.muted, height: 1.5),
             ),
           ),
         for (final n in list) ...[
-          const Divider(),
+          Divider(),
           NotifTile(n),
         ],
       ]),
@@ -533,27 +534,27 @@ class _DesktopHomeState extends State<DesktopHome> {
 
   Widget _clipCard() {
     return OACard(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(children: [
-          Expanded(child: Text('Ortak pano', style: oaDisplay(20))),
-          Text(k.clipShare ? 'Açık' : 'Kapalı', style: oaBody(13, color: OA.text2, weight: FontWeight.w600)),
-          const SizedBox(width: 6),
+          Expanded(child: Text(L('Ortak pano'), style: oaDisplay(20))),
+          Text(k.clipShare ? L('Açık') : L('Kapalı'), style: oaBody(13, color: OA.text2, weight: FontWeight.w600)),
+          SizedBox(width: 6),
           Switch(value: k.clipShare, onChanged: (v) => k.setClipShare(v)),
         ]),
-        const SizedBox(height: 6),
+        SizedBox(height: 6),
         Text(
           k.clipShare
-              ? 'Burada kopyaladığın, telefonda yapıştırılmaya hazır.'
-              : 'Kapalıyken bilgisayarda kopyaladıkların telefona gitmez.',
+              ? L('Burada kopyaladığın, telefonda yapıştırılmaya hazır.')
+              : L('Kapalıyken bilgisayarda kopyaladıkların telefona gitmez.'),
           style: oaBody(15, color: OA.muted),
         ),
-        const SizedBox(height: 14),
+        SizedBox(height: 14),
         if (k.clipHistory.isEmpty)
-          Text('Bir şey kopyaladığında burada görünür.', style: oaBody(14, color: OA.faint))
+          Text(L('Bir şey kopyaladığında burada görünür.'), style: oaBody(14, color: OA.faint))
         else ...[
-          Text('Geçmiş · tıkla, yeniden kopyala', style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
-          const ClipHistoryList(max: 5),
+          Text(L('Geçmiş · tıkla, yeniden kopyala'), style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
+          ClipHistoryList(max: 5),
         ],
       ]),
     );
@@ -562,26 +563,26 @@ class _DesktopHomeState extends State<DesktopHome> {
   Widget _incomingCard() {
     final inc = k.lastIncoming;
     return OACard(
-      padding: const EdgeInsets.all(24),
+      padding: EdgeInsets.all(24),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('Telefondan gelen', style: oaDisplay(20)),
-        const SizedBox(height: 14),
+        Text(L('Telefondan gelen'), style: oaDisplay(20)),
+        SizedBox(height: 14),
         if (inc == null)
-          Text('Telefondan gönderilen metin ve bağlantılar burada görünür. "Panoyu gönder" ile gelenler doğrudan panoya kopyalanır.',
+          Text(L('Telefondan gönderilen metin ve bağlantılar burada görünür. "Panoyu gönder" ile gelenler doğrudan panoya kopyalanır.'),
               style: oaBody(15, color: OA.muted, height: 1.5))
         else ...[
           TextPreview(
-            label: '${inc.isLink ? 'Bağlantı' : (inc.fromClipboard ? 'Pano · kopyalandı' : 'Metin')} · ${timeAgo(inc.at)}',
+            label: '${inc.isLink ? L('Bağlantı') : (inc.fromClipboard ? L('Pano · kopyalandı') : L('Metin'))} · ${timeAgo(inc.at)}',
             text: inc.text,
           ),
-          const SizedBox(height: 14),
+          SizedBox(height: 14),
           Wrap(spacing: 8, runSpacing: 8, children: [
-            if (inc.isLink) FilledButton(onPressed: () => openLink(inc.text), child: const Text('Aç')),
+            if (inc.isLink) FilledButton(onPressed: () => openLink(inc.text), child: Text(L('Aç'))),
             if (inc.isLink)
-              OutlinedButton(onPressed: () => copyText(context, inc.text), child: const Text('Kopyala'))
+              OutlinedButton(onPressed: () => copyText(context, inc.text), child: Text(L('Kopyala')))
             else
-              FilledButton(onPressed: () => copyText(context, inc.text), child: const Text('Kopyala')),
-            OutlinedButton(onPressed: k.dismissIncoming, child: const Text('Kapat')),
+              FilledButton(onPressed: () => copyText(context, inc.text), child: Text(L('Kopyala'))),
+            OutlinedButton(onPressed: k.dismissIncoming, child: Text(L('Kapat'))),
           ]),
         ],
       ]),
@@ -600,10 +601,10 @@ class _RoundIconButton extends StatelessWidget {
         message: tooltip,
         child: OutlinedButton(
           style: OutlinedButton.styleFrom(
-            minimumSize: const Size(44, 44),
-            maximumSize: const Size(44, 44),
+            minimumSize: Size(44, 44),
+            maximumSize: Size(44, 44),
             padding: EdgeInsets.zero,
-            shape: const CircleBorder(),
+            shape: CircleBorder(),
           ),
           onPressed: onPressed,
           child: Icon(icon, size: 20),
@@ -613,16 +614,16 @@ class _RoundIconButton extends StatelessWidget {
 
 /// Süren bir aktarımın satırı.
 class TransferRow extends StatelessWidget {
-  const TransferRow(this.t, {super.key});
+  TransferRow(this.t, {super.key});
   final ActiveTransfer t;
 
   @override
   Widget build(BuildContext context) {
     final state = switch (t.state) {
-      'done' => t.incoming ? 'Geldi' : 'Gitti',
-      'failed' => 'Olmadı',
-      'cancelled' => 'İptal',
-      'waiting' => 'Sırada',
+      'done' => t.incoming ? L('Geldi') : L('Gitti'),
+      'failed' => L('Olmadı'),
+      'cancelled' => L('İptal'),
+      'waiting' => L('Sırada'),
       _ => '%${(t.fraction * 100).round()}',
     };
     final color = switch (t.state) {
@@ -631,20 +632,20 @@ class TransferRow extends StatelessWidget {
       _ => OA.amber,
     };
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 8),
+      padding: EdgeInsets.symmetric(vertical: 8),
       child: Row(children: [
         IconBox(fileIcon(t.name), size: 44, color: OA.text2),
-        const SizedBox(width: 12),
+        SizedBox(width: 12),
         Expanded(
           child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Row(children: [
               Icon(t.incoming ? Icons.south : Icons.north, size: 14, color: OA.muted),
-              const SizedBox(width: 4),
+              SizedBox(width: 4),
               Expanded(child: Text(t.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: oaBody(15, weight: FontWeight.w600))),
-              const SizedBox(width: 8),
+              SizedBox(width: 8),
               Text(state, style: oaBody(13, color: t.state == 'running' ? OA.muted : color, weight: FontWeight.w600)),
             ]),
-            const SizedBox(height: 8),
+            SizedBox(height: 8),
             ClipRRect(
               borderRadius: BorderRadius.circular(999),
               child: LinearProgressIndicator(
@@ -680,7 +681,7 @@ class _SendTextDialogState extends State<_SendTextDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Metin ya da bağlantı gönder', style: oaDisplay(22)),
+      title: Text(L('Metin ya da bağlantı gönder'), style: oaDisplay(22)),
       content: SizedBox(
         width: 460,
         child: TextField(
@@ -689,12 +690,12 @@ class _SendTextDialogState extends State<_SendTextDialog> {
           minLines: 3,
           maxLines: 8,
           style: oaBody(15),
-          decoration: const InputDecoration(hintText: 'Yaz ya da yapıştır'),
+          decoration: InputDecoration(hintText: L('Yaz ya da yapıştır')),
         ),
       ),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(context), child: const Text('Vazgeç')),
-        FilledButton(onPressed: () => Navigator.pop(context, _c.text), child: const Text('Gönder')),
+        TextButton(onPressed: () => Navigator.pop(context), child: Text(L('Vazgeç'))),
+        FilledButton(onPressed: () => Navigator.pop(context, _c.text), child: Text(L('Gönder'))),
       ],
     );
   }
@@ -702,7 +703,7 @@ class _SendTextDialogState extends State<_SendTextDialog> {
 
 /// QR ve 6 haneli kod; telefon okutunca kendiliğinden kapanır.
 class PairDialog extends StatefulWidget {
-  const PairDialog({super.key});
+  PairDialog({super.key});
 
   @override
   State<PairDialog> createState() => _PairDialogState();
@@ -723,7 +724,7 @@ class _PairDialogState extends State<PairDialog> {
     _sub = k.events.listen((e) {
       if (e.type == 'paired' && mounted) Navigator.pop(context);
     });
-    _tick = Timer.periodic(const Duration(seconds: 1), (_) {
+    _tick = Timer.periodic(Duration(seconds: 1), (_) {
       if (!mounted) return;
       final s = k.pairSession;
       if (s == null || s.expired) {
@@ -750,39 +751,39 @@ class _PairDialogState extends State<PairDialog> {
     final code = s?.code ?? '';
     final left = s == null ? 0 : s.expires.difference(DateTime.now()).inSeconds.clamp(0, 300);
     return AlertDialog(
-      contentPadding: const EdgeInsets.fromLTRB(28, 24, 28, 8),
+      contentPadding: EdgeInsets.fromLTRB(28, 24, 28, 8),
       content: SizedBox(
         width: 420,
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-          Text('Telefonla eşleştir', style: oaDisplay(28)),
-          const SizedBox(height: 8),
-          Text('Telefonda Pusula Köprü\'yü aç ve bu kodu okut. İki cihaz aynı Wi-Fi\'de olmalı.',
+          Text(L('Telefonla eşleştir'), style: oaDisplay(28)),
+          SizedBox(height: 8),
+          Text(L('Telefonda Pusula Köprü\'yü aç ve bu kodu okut. İki cihaz aynı Wi-Fi\'de olmalı.'),
               style: oaBody(15, color: OA.text2, height: 1.5)),
-          const SizedBox(height: 20),
+          SizedBox(height: 20),
           Center(
             child: Container(
-              padding: const EdgeInsets.all(14),
+              padding: EdgeInsets.all(14),
               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(18)),
               child: _qr == null
-                  ? const SizedBox(width: 240, height: 240, child: Center(child: CircularProgressIndicator()))
+                  ? SizedBox(width: 240, height: 240, child: Center(child: CircularProgressIndicator()))
                   : QrImageView(data: _qr!, size: 240, backgroundColor: Colors.white, padding: EdgeInsets.zero),
             ),
           ),
-          const SizedBox(height: 20),
-          Text('Kamera yoksa telefonda "Kodla eşleştir"e bas ve şunu gir:', style: oaBody(14, color: OA.muted)),
-          const SizedBox(height: 8),
+          SizedBox(height: 20),
+          Text(L('Kamera yoksa telefonda "Kodla eşleştir"e bas ve şunu gir:'), style: oaBody(14, color: OA.muted)),
+          SizedBox(height: 8),
           Row(children: [
             Text(code.length == 6 ? '${code.substring(0, 3)} ${code.substring(3)}' : code,
                 style: oaDisplay(34).copyWith(letterSpacing: 2)),
-            const Spacer(),
+            Spacer(),
             Text('${left ~/ 60}:${(left % 60).toString().padLeft(2, '0')}', style: oaBody(13, color: OA.faint)),
           ]),
-          const SizedBox(height: 8),
-          Text('Windows "erişime izin ver" diye sorarsa izin ver; yoksa telefon bilgisayarı göremez.',
+          SizedBox(height: 8),
+          Text(L('Windows "erişime izin ver" diye sorarsa izin ver; yoksa telefon bilgisayarı göremez.'),
               style: oaBody(13, color: OA.faint, height: 1.4)),
         ]),
       ),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Kapat'))],
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(L('Kapat')))],
     );
   }
 }
@@ -791,15 +792,15 @@ Future<bool> confirmUnpair(BuildContext context, Peer p) async {
   final r = await showDialog<bool>(
     context: context,
     builder: (ctx) => AlertDialog(
-      title: Text('Eşleşme kaldırılsın mı?', style: oaDisplay(22)),
-      content: Text('${p.name} ile artık dosya ve pano paylaşılmaz. Yeniden bağlamak için tekrar eşleştirmen gerekir.',
+      title: Text(L('Eşleşme kaldırılsın mı?'), style: oaDisplay(22)),
+      content: Text(L('{0} ile artık dosya ve pano paylaşılmaz. Yeniden bağlamak için tekrar eşleştirmen gerekir.', [p.name]),
           style: oaBody(15, color: OA.text2, height: 1.5)),
       actions: [
-        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Vazgeç')),
+        TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text(L('Vazgeç'))),
         FilledButton(
           style: FilledButton.styleFrom(backgroundColor: OA.danger),
           onPressed: () => Navigator.pop(ctx, true),
-          child: const Text('Kaldır'),
+          child: Text(L('Kaldır')),
         ),
       ],
     ),
@@ -808,19 +809,19 @@ Future<bool> confirmUnpair(BuildContext context, Peer p) async {
 }
 
 class HistoryDialog extends StatelessWidget {
-  const HistoryDialog({super.key});
+  HistoryDialog({super.key});
 
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
       title: Row(children: [
-        Expanded(child: Text('Bütün aktarımlar', style: oaDisplay(22))),
+        Expanded(child: Text(L('Bütün aktarımlar'), style: oaDisplay(22))),
         TextButton(
           onPressed: () async {
             await Kopru.i.clearHistory();
             if (context.mounted) Navigator.pop(context);
           },
-          child: const Text('Geçmişi temizle'),
+          child: Text(L('Geçmişi temizle')),
         ),
       ]),
       content: SizedBox(
@@ -830,18 +831,18 @@ class HistoryDialog extends StatelessWidget {
           listenable: Kopru.i,
           builder: (_, __) => ListView.separated(
             itemCount: Kopru.i.history.length,
-            separatorBuilder: (_, __) => const Divider(),
+            separatorBuilder: (_, __) => Divider(),
             itemBuilder: (_, i) => HistoryTile(Kopru.i.history[i]),
           ),
         ),
       ),
-      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Kapat'))],
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: Text(L('Kapat')))],
     );
   }
 }
 
 class SettingsDialog extends StatefulWidget {
-  const SettingsDialog({super.key});
+  SettingsDialog({super.key});
 
   @override
   State<SettingsDialog> createState() => _SettingsDialogState();
@@ -870,72 +871,74 @@ class _SettingsDialogState extends State<SettingsDialog> {
   @override
   Widget build(BuildContext context) {
     return AlertDialog(
-      title: Text('Ayarlar', style: oaDisplay(24)),
+      title: Text(L('Ayarlar'), style: oaDisplay(24)),
       content: SizedBox(
         width: 460,
         child: ListenableBuilder(
           listenable: k,
           builder: (_, __) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-            Text('Bu bilgisayarın adı', style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
-            const SizedBox(height: 8),
+            const LanguagePicker(),
+            const SizedBox(height: 12),
+            Text(L('Bu bilgisayarın adı'), style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
+            SizedBox(height: 8),
             TextField(
               controller: _name,
               style: oaBody(15),
               onSubmitted: k.setMyName,
-              decoration: const InputDecoration(hintText: 'Örn. Ev bilgisayarı'),
+              decoration: InputDecoration(hintText: L('Örn. Ev bilgisayarı')),
             ),
-            const SizedBox(height: 20),
+            SizedBox(height: 20),
             Row(children: [
-              Expanded(child: Text('Panoyu telefonla paylaş', style: oaBody(15, weight: FontWeight.w600))),
+              Expanded(child: Text(L('Panoyu telefonla paylaş'), style: oaBody(15, weight: FontWeight.w600))),
               Switch(value: k.clipShare, onChanged: k.setClipShare),
             ]),
             Row(children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Farklı ağdayken de bağlan', style: oaBody(15, weight: FontWeight.w600)),
-                  Text('Telefon başka bir ağdayken (mobil veri, iş yeri) OA sunucusu üzerinden, uçtan uca şifreli.',
+                  Text(L('Farklı ağdayken de bağlan'), style: oaBody(15, weight: FontWeight.w600)),
+                  Text(L('Telefon başka bir ağdayken (mobil veri, iş yeri) OA sunucusu üzerinden, uçtan uca şifreli.'),
                       style: oaBody(13, color: OA.muted)),
                 ]),
               ),
               Switch(value: k.relayOn, onChanged: k.setRelay),
             ]),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Row(children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Text('Windows açılınca başlat', style: oaBody(15, weight: FontWeight.w600)),
-                  Text('Pencereyi kapatınca saat yanındaki simgeye iner, gelenleri almaya devam eder.',
+                  Text(L('Windows açılınca başlat'), style: oaBody(15, weight: FontWeight.w600)),
+                  Text(L('Pencereyi kapatınca saat yanındaki simgeye iner, gelenleri almaya devam eder.'),
                       style: oaBody(13, color: OA.muted)),
                 ]),
               ),
               Switch(value: k.autostart, onChanged: k.setAutostart),
             ]),
-            const SizedBox(height: 16),
-            Text('Gelen dosyalar', style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
-            const SizedBox(height: 6),
+            SizedBox(height: 16),
+            Text(L('Gelen dosyalar'), style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
+            SizedBox(height: 6),
             Row(children: [
               Expanded(child: Text(_folder ?? '', style: oaBody(14, color: OA.text2))),
               TextButton(
                 onPressed: _folder == null ? null : () => Process.run('explorer.exe', [_folder!]),
-                child: const Text('Klasörü aç'),
+                child: Text(L('Klasörü aç')),
               ),
             ]),
-            const SizedBox(height: 16),
+            SizedBox(height: 16),
             Row(children: [
-              Expanded(child: Text('Sürüm ${appVersion == '0.0.0' ? 'geliştirme' : appVersion}', style: oaBody(14, color: OA.muted))),
+              Expanded(child: Text(L('Sürüm {0}', [appVersion == '0.0.0' ? L('geliştirme') : appVersion]), style: oaBody(14, color: OA.muted))),
               TextButton(
                 onPressed: () async {
                   setState(() => _updateText = 'Denetleniyor…');
                   final u = await Updater.check();
                   if (!mounted) return;
                   if (u == null) {
-                    setState(() => _updateText = 'Güncel');
+                    setState(() => _updateText = L('Güncel'));
                   } else {
-                    showSnack(context, 'Yeni sürüm ${u.version} hazır: üst çubuktaki "Güncelle"ye bas');
+                    showSnack(context, L('Yeni sürüm {0} hazır: üst çubuktaki "Güncelle"ye bas', [u.version]));
                     Navigator.pop(context); // üst çubukta "Güncelle" düğmesi belirdi
                   }
                 },
-                child: Text(_updateText ?? 'Güncellemeleri denetle'),
+                child: Text(_updateText ?? L('Güncellemeleri denetle')),
               ),
             ]),
           ]),
@@ -947,7 +950,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
             if (_name.text.trim() != k.myName) await k.setMyName(_name.text);
             if (context.mounted) Navigator.pop(context);
           },
-          child: const Text('Tamam'),
+          child: Text(L('Tamam')),
         ),
       ],
     );
@@ -957,7 +960,7 @@ class _SettingsDialogState extends State<SettingsDialog> {
 
 /// Telefondan gelen bir bildirim; yanıt verilebiliyorsa yanıt kutusu.
 class NotifTile extends StatefulWidget {
-  const NotifTile(this.n, {super.key});
+  NotifTile(this.n, {super.key});
   final PhoneNotif n;
 
   @override
@@ -988,18 +991,18 @@ class _NotifTileState extends State<NotifTile> {
         _c.clear();
       }
     });
-    showSnack(context, ok ? 'Yanıt gönderildi' : 'Yanıt gönderilemedi');
+    showSnack(context, ok ? L('Yanıt gönderildi') : L('Yanıt gönderilemedi'));
   }
 
   @override
   Widget build(BuildContext context) {
     final n = widget.n;
     return Padding(
-      padding: const EdgeInsets.symmetric(vertical: 12),
+      padding: EdgeInsets.symmetric(vertical: 12),
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
         Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
           IconBox(Icons.notifications_none, size: 40, color: OA.text2, radius: 12),
-          const SizedBox(width: 14),
+          SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text('${n.app} · ${timeAgo(n.at)}', style: oaBody(13, color: OA.muted)),
@@ -1007,21 +1010,21 @@ class _NotifTileState extends State<NotifTile> {
               if (n.text.isNotEmpty)
                 Text(n.text, maxLines: 4, overflow: TextOverflow.ellipsis, style: oaBody(15, color: OA.text2, height: 1.4)),
               if (n.replied != null) ...[
-                const SizedBox(height: 4),
-                Text('Yanıtın: ${n.replied}', style: oaBody(13, color: OA.green)),
+                SizedBox(height: 4),
+                Text(L('Yanıtın: {0}', [n.replied]), style: oaBody(13, color: OA.green)),
               ],
             ]),
           ),
           if (n.canReply && !_open)
-            TextButton(onPressed: () => setState(() => _open = true), child: const Text('Yanıtla')),
+            TextButton(onPressed: () => setState(() => _open = true), child: Text(L('Yanıtla'))),
           IconButton(
-            tooltip: 'Kaldır',
+            tooltip: L('Kaldır'),
             onPressed: () => Kopru.i.dismissNotif(n),
-            icon: const Icon(Icons.close, size: 18, color: OA.muted),
+            icon: Icon(Icons.close, size: 18, color: OA.muted),
           ),
         ]),
         if (_open) ...[
-          const SizedBox(height: 10),
+          SizedBox(height: 10),
           Row(children: [
             Expanded(
               child: TextField(
@@ -1029,11 +1032,11 @@ class _NotifTileState extends State<NotifTile> {
                 autofocus: true,
                 style: oaBody(15),
                 onSubmitted: (_) => _send(),
-                decoration: const InputDecoration(hintText: 'Yanıt yaz'),
+                decoration: InputDecoration(hintText: L('Yanıt yaz')),
               ),
             ),
-            const SizedBox(width: 8),
-            FilledButton(onPressed: _busy ? null : _send, child: const Text('Gönder')),
+            SizedBox(width: 8),
+            FilledButton(onPressed: _busy ? null : _send, child: Text(L('Gönder'))),
           ]),
         ],
       ]),

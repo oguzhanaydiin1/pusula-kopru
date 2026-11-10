@@ -1,5 +1,8 @@
 # Sürüm notları
 
+## 0.5.0
+- **İngilizce arayüz:** Uygulama cihazın diline göre Türkçe ya da İngilizce açılır; Ayarlar → Dil'den değiştirilebilir. Android bildirimleri ve Windows kurulum programı da İngilizce.
+
 ## 0.4.0
 - **Dokunmatik yüzey ve klavye:** Telefon bilgisayarın faresi olur: kaydır, dokun, uzun bas (sağ tık), iki parmakla kaydır, sürükle. Klavyeyle yazdıkların bilgisayarda belirir; Enter, ok tuşları, kopyala/yapıştır düğmeleri.
 - **Sunum kumandası:** Büyük İleri/Geri düğmeleri, sunumu başlat/bitir, siyah ekran, süre. Telefonun ses tuşlarıyla da slayt geçilir.

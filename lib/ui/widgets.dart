@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../l10n.dart';
+import '../main.dart' show KopruApp;
 import '../core/models.dart';
 import '../core/native.dart';
 import '../core/node.dart';
@@ -11,7 +13,7 @@ import '../theme.dart';
 
 /// OA işareti + "Köprü" yazısı.
 class OALogo extends StatelessWidget {
-  const OALogo({super.key, this.size = 20, this.showText = true});
+  OALogo({super.key, this.size = 20, this.showText = true});
   final double size;
   final bool showText;
 
@@ -26,7 +28,7 @@ class OALogo extends StatelessWidget {
         child: Text('OA', style: oaDisplay(13, color: OA.bg).copyWith(letterSpacing: -0.5)),
       ),
       if (showText) ...[
-        const SizedBox(width: 10),
+        SizedBox(width: 10),
         Text('Köprü', style: oaDisplay(size)),
       ],
     ]);
@@ -34,7 +36,7 @@ class OALogo extends StatelessWidget {
 }
 
 class OACard extends StatelessWidget {
-  const OACard({super.key, required this.child, this.padding = const EdgeInsets.all(20), this.highlight = false, this.onTap});
+  OACard({super.key, required this.child, this.padding = const EdgeInsets.all(20), this.highlight = false, this.onTap});
   final Widget child;
   final EdgeInsetsGeometry padding;
   final bool highlight;
@@ -61,7 +63,7 @@ class OACard extends StatelessWidget {
 }
 
 class IconBox extends StatelessWidget {
-  const IconBox(this.icon, {super.key, this.size = 44, this.color = OA.amber, this.radius = 14});
+  IconBox(this.icon, {super.key, this.size = 44, this.color = OA.amber, this.radius = 14});
   final IconData icon;
   final double size;
   final Color color;
@@ -77,7 +79,7 @@ class IconBox extends StatelessWidget {
 }
 
 class OAChip extends StatelessWidget {
-  const OAChip({super.key, required this.label, this.dot, this.icon});
+  OAChip({super.key, required this.label, this.dot, this.icon});
   final String label;
   final Color? dot;
   final IconData? icon;
@@ -85,7 +87,7 @@ class OAChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         height: 30,
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: EdgeInsets.symmetric(horizontal: 12),
         decoration: BoxDecoration(
           color: OA.surface2,
           borderRadius: BorderRadius.circular(999),
@@ -94,9 +96,9 @@ class OAChip extends StatelessWidget {
         child: Row(mainAxisSize: MainAxisSize.min, children: [
           if (dot != null) ...[
             Container(width: 8, height: 8, decoration: BoxDecoration(color: dot, shape: BoxShape.circle)),
-            const SizedBox(width: 8),
+            SizedBox(width: 8),
           ],
-          if (icon != null) ...[Icon(icon, size: 15, color: OA.text2), const SizedBox(width: 6)],
+          if (icon != null) ...[Icon(icon, size: 15, color: OA.text2), SizedBox(width: 6)],
           Text(label, style: oaBody(13, color: OA.text2, weight: FontWeight.w600)),
         ]),
       );
@@ -105,9 +107,9 @@ class OAChip extends StatelessWidget {
 IconData peerIcon(Peer p) => p.isPhone ? Icons.smartphone_outlined : Icons.computer_outlined;
 
 String peerStatus(Peer p) {
-  if (p.online) return 'Bağlı';
+  if (p.online) return L('Bağlı');
   final s = p.lastSeen;
-  return s == null ? 'Bağlı değil' : 'Son görülme: ${timeAgo(s)}';
+  return s == null ? L('Bağlı değil') : L('Son görülme: {0}', [timeAgo(s)]);
 }
 
 IconData fileIcon(String name) {
@@ -121,7 +123,7 @@ IconData fileIcon(String name) {
 
 /// Geçmişteki bir satır.
 class HistoryTile extends StatelessWidget {
-  const HistoryTile(this.h, {super.key, this.compact = false});
+  HistoryTile(this.h, {super.key, this.compact = false});
   final HistoryItem h;
   final bool compact;
 
@@ -133,16 +135,16 @@ class HistoryTile extends StatelessWidget {
       _ => fileIcon(h.name),
     };
     final direction = Kopru.i.isPhone
-        ? (h.incoming ? 'Bilgisayardan' : 'Bilgisayara')
-        : (h.incoming ? 'Telefondan' : 'Telefona');
+        ? (h.incoming ? L('Bilgisayardan') : L('Bilgisayara'))
+        : (h.incoming ? L('Telefondan') : L('Telefona'));
     final what = switch (h.kind) {
-      'link' => 'Bağlantı',
-      'text' => 'Metin',
+      'link' => L('Bağlantı'),
+      'text' => L('Metin'),
       _ => formatSize(h.size),
     };
     final meta = Kopru.i.isPhone
-        ? '$direction · $what · ${timeAgo(h.at)}${h.ok ? '' : ' · gönderilemedi'}'
-        : '$what · ${timeAgo(h.at)}${h.ok ? '' : ' · gönderilemedi'}';
+        ? '${direction} · ${what} · ${timeAgo(h.at)}${h.ok ? '' : L(' · gönderilemedi')}'
+        : '${what} · ${timeAgo(h.at)}${h.ok ? '' : L(' · gönderilemedi')}';
     final canOpen = h.kind == 'file' && h.incoming && h.location != null;
     return InkWell(
       onTap: () async {
@@ -158,17 +160,17 @@ class HistoryTile extends StatelessWidget {
         padding: EdgeInsets.symmetric(vertical: compact ? 12 : 14),
         child: Row(children: [
           _thumb(h) ?? IconBox(icon, size: 40, color: h.ok ? OA.text2 : OA.danger, radius: 12),
-          const SizedBox(width: 14),
+          SizedBox(width: 14),
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(h.kind == 'file' ? h.name : h.name.replaceAll('\n', ' '),
                   maxLines: 1, overflow: TextOverflow.ellipsis, style: oaBody(15, weight: FontWeight.w600)),
-              const SizedBox(height: 2),
+              SizedBox(height: 2),
               Text(meta, maxLines: 1, overflow: TextOverflow.ellipsis, style: oaBody(13, color: OA.muted)),
             ]),
           ),
           if (!Kopru.i.isPhone) ...[
-            const SizedBox(width: 12),
+            SizedBox(width: 12),
             Text(direction, style: oaBody(13, color: OA.text2, weight: FontWeight.w600)),
           ],
         ]),
@@ -185,13 +187,13 @@ Widget? _thumb(HistoryItem h) {
   if (!f.existsSync()) return null;
   return ClipRRect(
     borderRadius: BorderRadius.circular(12),
-    child: Image.file(f, width: 40, height: 40, fit: BoxFit.cover, cacheWidth: 96, errorBuilder: (_, __, ___) => const IconBox(Icons.image_outlined, size: 40, color: OA.text2, radius: 12)),
+    child: Image.file(f, width: 40, height: 40, fit: BoxFit.cover, cacheWidth: 96, errorBuilder: (_, __, ___) => IconBox(Icons.image_outlined, size: 40, color: OA.text2, radius: 12)),
   );
 }
 
 Future<void> copyText(BuildContext context, String text) async {
   await ClipboardHelper.set(text);
-  showSnack(context, 'Kopyalandı');
+  showSnack(context, L('Kopyalandı'));
 }
 
 class ClipboardHelper {
@@ -210,12 +212,12 @@ void showSnack(BuildContext context, String text) {
   final m = ScaffoldMessenger.maybeOf(context);
   if (m == null) return;
   m.hideCurrentSnackBar();
-  m.showSnackBar(SnackBar(content: Text(text), duration: const Duration(seconds: 3)));
+  m.showSnackBar(SnackBar(content: Text(text), duration: Duration(seconds: 3)));
 }
 
 /// Başlık + sağda isteğe bağlı bağlantı.
 class SectionHeader extends StatelessWidget {
-  const SectionHeader(this.title, {super.key, this.action, this.onAction, this.size = 20});
+  SectionHeader(this.title, {super.key, this.action, this.onAction, this.size = 20});
   final String title;
   final String? action;
   final VoidCallback? onAction;
@@ -230,7 +232,7 @@ class SectionHeader extends StatelessWidget {
 
 /// Koyu kutuda metin önizlemesi.
 class TextPreview extends StatelessWidget {
-  const TextPreview({super.key, required this.label, required this.text, this.maxLines = 3});
+  TextPreview({super.key, required this.label, required this.text, this.maxLines = 3});
   final String label;
   final String text;
   final int maxLines;
@@ -238,7 +240,7 @@ class TextPreview extends StatelessWidget {
   @override
   Widget build(BuildContext context) => Container(
         width: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        padding: EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         decoration: BoxDecoration(
           color: OA.bg,
           borderRadius: BorderRadius.circular(14),
@@ -246,8 +248,34 @@ class TextPreview extends StatelessWidget {
         ),
         child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(label, style: oaBody(13, color: OA.muted)),
-          const SizedBox(height: 6),
+          SizedBox(height: 6),
           SelectableText(text, maxLines: maxLines, style: oaBody(15)),
         ]),
       );
+}
+
+
+/// Dil seçimi (Ayarlar): Sistem / Türkçe / English
+class LanguagePicker extends StatelessWidget {
+  const LanguagePicker({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(children: [
+      Expanded(child: Text(Lang.en ? 'Language' : 'Dil', style: oaBody(15, weight: FontWeight.w600))),
+      DropdownButton<String>(
+        value: Lang.setting,
+        dropdownColor: OA.surface2,
+        underline: const SizedBox.shrink(),
+        items: [
+          DropdownMenuItem(value: 'auto', child: Text(Lang.en ? 'System language' : 'Sistem dili')),
+          const DropdownMenuItem(value: 'tr', child: Text('Türkçe')),
+          const DropdownMenuItem(value: 'en', child: Text('English')),
+        ],
+        onChanged: (v) {
+          if (v != null) KopruApp.setLang(context, v);
+        },
+      ),
+    ]);
+  }
 }

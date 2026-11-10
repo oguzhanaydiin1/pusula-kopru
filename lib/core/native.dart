@@ -107,6 +107,8 @@ class Native {
 
   static Future<String?> copyMedia(String id, String name) => _call<String>('copyMedia', {'id': id, 'name': name});
 
+  static Future<void> setLang(String lang) => _call('setLang', {'lang': lang});
+
   static Future<void> captureVolume(bool on) => _call('captureVolume', {'on': on});
 
   // Bildirim aynası (0.3)

@@ -41,15 +41,15 @@ class KopruService : Service() {
         fun channels(context: Context) {
             if (Build.VERSION.SDK_INT < 26) return
             val nm = context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-            nm.createNotificationChannel(NotificationChannel(CH_SERVICE, "Arka planda çalışma", NotificationManager.IMPORTANCE_MIN).apply {
-                description = "Pusula Köprü açıkken görünen sessiz bildirim"
+            nm.createNotificationChannel(NotificationChannel(CH_SERVICE, NativeBridge.t(context, "Arka planda çalışma", "Running in the background"), NotificationManager.IMPORTANCE_MIN).apply {
+                description = NativeBridge.t(context, "Pusula Köprü açıkken görünen sessiz bildirim", "Quiet notification while Pusula Köprü is on")
                 setShowBadge(false)
             })
-            nm.createNotificationChannel(NotificationChannel(CH_INCOMING, "Gelenler", NotificationManager.IMPORTANCE_DEFAULT).apply {
-                description = "Bilgisayardan gelen dosya, bağlantı ve metinler"
+            nm.createNotificationChannel(NotificationChannel(CH_INCOMING, NativeBridge.t(context, "Gelenler", "Received"), NotificationManager.IMPORTANCE_DEFAULT).apply {
+                description = NativeBridge.t(context, "Bilgisayardan gelen dosya, bağlantı ve metinler", "Files, links and text from the PC")
             })
-            nm.createNotificationChannel(NotificationChannel(CH_RING, "Telefonu çaldır", NotificationManager.IMPORTANCE_HIGH).apply {
-                description = "Bilgisayardan telefon çaldırılınca"
+            nm.createNotificationChannel(NotificationChannel(CH_RING, NativeBridge.t(context, "Telefonu çaldır", "Ring phone"), NotificationManager.IMPORTANCE_HIGH).apply {
+                description = NativeBridge.t(context, "Bilgisayardan telefon çaldırılınca", "When the PC rings the phone")
                 setSound(null, null)
             })
         }
@@ -99,8 +99,8 @@ class KopruService : Service() {
         )
         val b = if (Build.VERSION.SDK_INT >= 26) Notification.Builder(this, CH_SERVICE) else @Suppress("DEPRECATION") Notification.Builder(this)
         return b.setSmallIcon(R.drawable.ic_stat_kopru)
-            .setContentTitle("Pusula Köprü açık")
-            .setContentText("Bilgisayarından gelenleri alabilir")
+            .setContentTitle(NativeBridge.t(this, "Pusula Köprü açık", "Pusula Köprü is on"))
+            .setContentText(NativeBridge.t(this, "Bilgisayarından gelenleri alabilir", "Ready to receive from your PC"))
             .setContentIntent(open)
             .setOngoing(true)
             .setShowWhen(false)

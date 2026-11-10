@@ -1,3 +1,4 @@
+import '../l10n.dart';
 import 'crypto.dart';
 
 /// Eşleşmiş bir cihaz.
@@ -247,11 +248,11 @@ String formatSize(int bytes) {
 
 String timeAgo(DateTime t) {
   final d = DateTime.now().difference(t);
-  if (d.inSeconds < 45) return 'az önce';
-  if (d.inMinutes < 60) return '${d.inMinutes < 1 ? 1 : d.inMinutes} dk önce';
-  if (d.inHours < 24) return '${d.inHours} sa önce';
-  if (d.inDays == 1) return 'dün';
-  if (d.inDays < 7) return '${d.inDays} gün önce';
+  if (d.inSeconds < 45) return L('az önce');
+  if (d.inMinutes < 60) return L('{0} dk önce', [d.inMinutes < 1 ? 1 : d.inMinutes]);
+  if (d.inHours < 24) return L('{0} sa önce', [d.inHours]);
+  if (d.inDays == 1) return L('dün');
+  if (d.inDays < 7) return L('{0} gün önce', [d.inDays]);
   return '${t.day.toString().padLeft(2, '0')}.${t.month.toString().padLeft(2, '0')}.${t.year}';
 }
 
