@@ -358,12 +358,12 @@ class _DesktopHomeState extends State<DesktopHome> {
             onPressed: () => _ring(p),
             icon: Icon(Icons.notifications_active_outlined, size: 18),
             label: Text(L('Telefonu çaldır')),
+          ),
           SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: () => showLocateDialog(context, p),
             icon: Icon(Icons.location_searching, size: 18),
             label: Text(L('Telefonu bul')),
-          ),
           ),
           SizedBox(height: 8),
           OutlinedButton.icon(
