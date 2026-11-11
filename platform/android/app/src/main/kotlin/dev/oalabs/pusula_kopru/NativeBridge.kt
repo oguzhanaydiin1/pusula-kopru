@@ -140,6 +140,18 @@ object NativeBridge {
                     val name = call.argument<String>("name") ?: "dosya"
                     bg(result) { MediaAccess.copy(app, id, name) }
                 }
+                "locationPermission" -> result.success(Locator.hasPermission(app))
+                "requestLocation" -> {
+                    Locator.request(activityRef?.get(), call.argument<Boolean>("background") == true)
+                    result.success(true)
+                }
+                "locate" -> {
+                    if (!Locator.hasPermission(app)) {
+                        result.success(mapOf("permission" to false))
+                    } else {
+                        Locator.locate(app) { loc -> main.post { result.success(loc) } }
+                    }
+                }
                 "setLang" -> {
                     app.getSharedPreferences(PREFS, Context.MODE_PRIVATE).edit().putString("lang", call.argument<String>("lang") ?: "tr").apply()
                     KopruService.channels(app)

@@ -1,5 +1,11 @@
 # Sürüm notları
 
+## 0.6.0
+- **Sağ tıkla gönder:** Windows Gezgini'nde dosya ya da klasöre sağ tıkla → "Pusula Köprü ile telefona gönder". Windows 11'de "Diğer seçenekleri göster" altında.
+- **Bilgisayarda yazdır:** Telefondan seçtiğin dosyalar bilgisayarın varsayılan yazıcısından çıkar.
+- **Telefonu bul:** Bilgisayardan telefonun konumunu haritada gör, çaldır. Telefonda Ayarlar'dan açılır; konum iznine "Her zaman izin ver" denmeli.
+- **Otomatik eylemler:** Telefon uzaklaşınca bilgisayarı kilitle; eve gelince uyuyan bilgisayarı uyandır (Wake-on-LAN); telefonun pili azalınca ya da dolunca Windows bildirimi.
+
 ## 0.5.0
 - **İngilizce arayüz:** Uygulama cihazın diline göre Türkçe ya da İngilizce açılır; Ayarlar → Dil'den değiştirilebilir. Android bildirimleri ve Windows kurulum programı da İngilizce.
 

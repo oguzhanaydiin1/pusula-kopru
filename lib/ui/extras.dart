@@ -364,6 +364,16 @@ Future<void> showPowerSheet(BuildContext context, Peer p) async {
             title: Text(L('Kilitle')),
             onTap: () => run('lock', L('Bilgisayar kilitlendi')),
           ),
+          if (k.canWake(p) && !p.lanOnline)
+            ListTile(
+              leading: Icon(Icons.wb_sunny_outlined, color: OA.amber),
+              title: Text(L('Uyandır (Wake-on-LAN)')),
+              onTap: () async {
+                Navigator.pop(context);
+                final ok = await k.wake(p);
+                if (context.mounted) showSnack(context, ok ? L('Uyandırma sinyali gönderildi') : L('Gönderilemedi'));
+              },
+            ),
           ListTile(
             leading: Icon(Icons.bedtime_outlined, color: OA.amber),
             title: Text(L('Uyut')),
@@ -836,4 +846,70 @@ Future<void> openFolder(String path) async {
   final d = Directory(path);
   if (!d.existsSync()) d.createSync(recursive: true);
   await Process.run('explorer.exe', [path]);
+}
+
+
+// ============================================================ telefonu bul (bilgisayar)
+
+Future<void> showLocateDialog(BuildContext context, Peer p) async {
+  final future = Kopru.i.locatePhone(p);
+  await showDialog(
+    context: context,
+    builder: (ctx) => AlertDialog(
+      title: Text(L('Telefonu bul'), style: oaDisplay(22)),
+      content: SizedBox(
+        width: 420,
+        child: FutureBuilder<(Map<String, dynamic>?, String?)>(
+          future: future,
+          builder: (ctx, snap) {
+            if (!snap.hasData) {
+              return Row(children: [
+                const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)),
+                const SizedBox(width: 14),
+                Expanded(child: Text(L('{0} konumunu buluyor…', [p.name]), style: oaBody(15, color: OA.text2))),
+              ]);
+            }
+            final (loc, err) = snap.data!;
+            if (loc == null) {
+              return Text(
+                switch (err) {
+                  'izin' => L('Telefonda konum izni verilmemiş. Telefonda Pusula Köprü → Ayarlar → "Telefonu bul" ayarını aç ve izin ver.'),
+                  'kapali' => L('Telefonda "Telefonu bul: bilgisayar konumumu görebilsin" kapalı (Pusula Köprü → Ayarlar).'),
+                  'yok' => L('Konum alınamadı. Telefonda konum (GPS) kapalı olabilir.'),
+                  _ => L('{0} yanıt vermedi. Bağlı mı?', [p.name]),
+                },
+                style: oaBody(15, color: OA.text2, height: 1.5),
+              );
+            }
+            final lat = (loc['lat'] as num).toDouble(), lon = (loc['lon'] as num).toDouble();
+            final acc = (loc['acc'] as num?)?.round();
+            final at = DateTime.fromMillisecondsSinceEpoch((loc['time'] as num?)?.toInt() ?? 0);
+            final url = 'https://www.openstreetmap.org/?mlat=$lat&mlon=$lon#map=17/$lat/$lon';
+            return Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${lat.toStringAsFixed(5)}, ${lon.toStringAsFixed(5)}', style: oaDisplay(22)),
+              const SizedBox(height: 6),
+              Text(
+                [if (acc != null) L('±{0} m', [acc]), timeAgo(at), if (loc['fresh'] != true) L('son bilinen konum')].join(' · '),
+                style: oaBody(14, color: OA.muted),
+              ),
+              const SizedBox(height: 16),
+              Wrap(spacing: 8, runSpacing: 8, children: [
+                FilledButton.icon(
+                  onPressed: () => openLink(url),
+                  icon: const Icon(Icons.map_outlined, size: 18),
+                  label: Text(L('Haritada aç')),
+                ),
+                OutlinedButton.icon(
+                  onPressed: () => Kopru.i.ring(p),
+                  icon: const Icon(Icons.notifications_active_outlined, size: 18),
+                  label: Text(L('Telefonu çaldır')),
+                ),
+              ]),
+            ]);
+          },
+        ),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.pop(ctx), child: Text(L('Kapat')))],
+    ),
+  );
 }

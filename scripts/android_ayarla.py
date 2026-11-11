@@ -29,6 +29,9 @@ PERMS = [
     'android.permission.RECEIVE_BOOT_COMPLETED',
     'android.permission.READ_MEDIA_IMAGES',
     'android.permission.READ_MEDIA_VIDEO',
+    'android.permission.ACCESS_COARSE_LOCATION',
+    'android.permission.ACCESS_FINE_LOCATION',
+    'android.permission.ACCESS_BACKGROUND_LOCATION',
 ]
 
 # Arka plan hizmeti, açılışta başlatma ve (0.3) bildirim aynası

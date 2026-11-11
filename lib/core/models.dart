@@ -125,7 +125,9 @@ class ActiveTransfer {
     required this.batch,
     this.dir = '',
     this.backup = false,
+    this.print = false,
   });
+  final bool print; // bilgisayarda yazdırılsın
   final String dir; // klasör gönderiminde alt klasör (ör. "Tatil/2024")
   final bool backup; // fotoğraf yedeği (geçmişe yazılmaz)
 

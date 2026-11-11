@@ -97,6 +97,22 @@ class Kopru extends ChangeNotifier {
   final backupReceived = <String, int>{};
   bool browseAllowed = true; // bilgisayar bu telefonun fotoğraflarına göz atabilsin
 
+  // Sağ tık menüsünden gelen dosyalar (Windows, "--send")
+  List<String> pendingSend = const [];
+
+  // Telefonu bul
+  bool locateAllowed = false; // telefon: bilgisayar konumu görebilsin
+
+  // Otomatik eylemler
+  bool autoLock = false; // bilgisayar: telefon uzaklaşınca kilitle
+  bool autoWake = false; // telefon: eve gelince bilgisayarı uyandır
+  bool batteryAlerts = true; // bilgisayar: telefonun pili azaldı / doldu
+  final _wasNear = <String, DateTime>{};
+  final _lockedFor = <String>{};
+  final _lastBatteryAlert = <String, String>{};
+  DateTime? _lastWake;
+  Timer? _autoTimer;
+
   // Eşleştirmeden gönderme
   final visible = <String, NearbyDevice>{}; // "Yakındakilerden al" açık olan cihazlar
   DateTime? visibleUntil; // bu cihaz görünür mü
@@ -165,6 +181,10 @@ class Kopru extends ChangeNotifier {
     final bl = _prefs.getInt('backupLast');
     if (bl != null) backupLast = DateTime.fromMillisecondsSinceEpoch(bl);
     browseAllowed = _prefs.getBool('browseAllowed') ?? true;
+    locateAllowed = _prefs.getBool('locateAllowed') ?? false;
+    autoLock = _prefs.getBool('autoLock') ?? false;
+    autoWake = _prefs.getBool('autoWake') ?? false;
+    batteryAlerts = _prefs.getBool('batteryAlerts') ?? true;
     try {
       final r = jsonDecode(_prefs.getString('backupReceived') ?? '{}') as Map;
       r.forEach((k, v) => backupReceived[k.toString()] = (v as num).toInt());
@@ -209,7 +229,10 @@ class Kopru extends ChangeNotifier {
       };
       if (peers.isNotEmpty && background) Native.setBackground(true);
     }
-    if (Platform.isWindows) _applyAutostart(autostart);
+    if (Platform.isWindows) {
+      _applyAutostart(autostart);
+      _loadMacs();
+    }
     await _startServer();
     await _startDiscovery();
 
@@ -224,6 +247,15 @@ class Kopru extends ChangeNotifier {
     _announce();
     Future.delayed(const Duration(milliseconds: 600), _probeOffline);
     _ensureRelays();
+    _autoTimer = Timer.periodic(const Duration(seconds: 15), (_) => _automations());
+    if (Platform.isWindows) {
+      _registerContextMenu();
+      if (pendingSend.isNotEmpty) {
+        final paths = pendingSend;
+        pendingSend = const [];
+        Future.delayed(const Duration(seconds: 3), () => _sendFromShell(paths));
+      }
+    }
     if (isPhone) {
       _backupTimer = Timer.periodic(const Duration(minutes: 10), (_) => runBackup());
       Future.delayed(const Duration(seconds: 20), runBackup);
@@ -295,7 +327,7 @@ class Kopru extends ChangeNotifier {
   }
 
   /// Yanıt gerektiren iletiler: sunucu üzerinden de yanıt beklenir.
-  static const _needsReply = {'mlist', 'mthumb', 'mpull', 'notifReply', 'ping'};
+  static const _needsReply = {'mlist', 'mthumb', 'mpull', 'notifReply', 'ping', 'locate'};
 
   /// Bağlantı yolu: arayüzde "Aynı Wi-Fi · doğrudan" ya da "İnternet üzerinden · şifreli"
   bool viaRelay(Peer p) => !p.lanOnline && p.relayOnline;
@@ -350,6 +382,45 @@ class Kopru extends ChangeNotifier {
     } catch (_) {}
   }
 
+  /// Gezgin'deki sağ tık menüsü: "Pusula Köprü ile telefona gönder" (HKCU, yönetici izni gerekmez).
+  Future<void> _registerContextMenu() async {
+    final exe = Platform.resolvedExecutable;
+    final label = L('Pusula Köprü ile telefona gönder');
+    for (final root in [r'HKCU\Software\Classes\*\shell\PusulaKopru', r'HKCU\Software\Classes\Directory\shell\PusulaKopru']) {
+      try {
+        await Process.run('reg', ['add', root, '/ve', '/t', 'REG_SZ', '/d', label, '/f']);
+        await Process.run('reg', ['add', root, '/v', 'Icon', '/t', 'REG_SZ', '/d', exe, '/f']);
+        await Process.run('reg', ['add', '$root\\command', '/ve', '/t', 'REG_SZ', '/d', '"$exe" --send "%1"', '/f']);
+      } catch (_) {}
+    }
+  }
+
+  /// Sağ tık menüsünden gelen dosyaları seçili (ya da ilk) telefona gönderir. Arka arkaya gelenler birleşir.
+  final _shellQueue = <String>[];
+  Timer? _shellTimer;
+  Future<bool> _sendFromShell(List<String> paths) async {
+    final target = (selected?.isPhone == true ? selected : null) ??
+        peers.where((p) => p.isPhone && p.online).firstOrNull ??
+        peers.where((p) => p.isPhone).firstOrNull;
+    if (target == null) {
+      Notifier.showWindow?.call();
+      await Notifier.show(L('Gönderilemedi'), L('Önce bir telefon eşleştir'), always: true);
+      return false;
+    }
+    _shellQueue.addAll(paths.where((e) => e.isNotEmpty));
+    _shellTimer?.cancel();
+    _shellTimer = Timer(const Duration(milliseconds: 700), () {
+      final list = _shellQueue.toSet().toList();
+      _shellQueue.clear();
+      if (list.isEmpty) return;
+      sendFiles(target, list);
+      Notifier.show(L('{0} cihazına gönderiliyor', [target.name]),
+          list.length == 1 ? list.first.split(RegExp(r'[\\/]')).last : L('{0} öğe', [list.length]),
+          always: true);
+    });
+    return true;
+  }
+
   /// Windows: aynı bilgisayarda Pusula Köprü zaten açıksa onu öne getirir.
   Future<bool> _otherInstance() async {
     try {
@@ -357,7 +428,14 @@ class Kopru extends ChangeNotifier {
       if (r.statusCode != 200) return false;
       final j = jsonDecode(utf8.decode(r.bodyBytes));
       if (j is! Map || j['id'] != myId) return false;
-      await http.get(Uri.parse('http://127.0.0.1:$kPort/v1/local/show')).timeout(const Duration(seconds: 2));
+      if (pendingSend.isNotEmpty) {
+        await http
+            .post(Uri.parse('http://127.0.0.1:$kPort/v1/local/files'),
+                headers: {'content-type': 'application/json'}, body: jsonEncode({'paths': pendingSend}))
+            .timeout(const Duration(seconds: 5));
+      } else {
+        await http.get(Uri.parse('http://127.0.0.1:$kPort/v1/local/show')).timeout(const Duration(seconds: 2));
+      }
       return true;
     } catch (_) {
       return false;
@@ -502,6 +580,12 @@ class Kopru extends ChangeNotifier {
         ],
       });
     }
+    if (path == '/v1/local/files' && req.method == 'POST') {
+      final j = jsonDecode(utf8.decode(await _readAll(req, 1 << 20)));
+      final paths = j is Map ? ((j['paths'] as List?) ?? const []).map((e) => e.toString()).toList() : <String>[];
+      final ok = await _sendFromShell(paths);
+      return await _replyJson(req, {'ok': ok});
+    }
     if (path == '/v1/local/send' && req.method == 'POST') {
       final j = jsonDecode(utf8.decode(await _readAll(req, 1 << 20)));
       if (j is! Map) return await _reply(req, 400);
@@ -547,7 +631,29 @@ class Kopru extends ChangeNotifier {
     notifyListeners();
   }
 
-  Map<String, dynamic> _statusFields() => {'name': myName, 'platform': platform};
+  Map<String, dynamic> _statusFields() => {'name': myName, 'platform': platform, if (_macs.isNotEmpty) 'macs': _macs};
+
+  // Windows: ağ kartlarının MAC adresleri (telefon "eve gelince uyandır" için kullanır)
+  Map<String, String> _macs = {};
+  Future<void> _loadMacs() async {
+    if (!Platform.isWindows) return;
+    try {
+      final r = await Process.run('powershell', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        r'Get-NetIPAddress -AddressFamily IPv4 | ForEach-Object { $a = Get-NetAdapter -InterfaceIndex $_.InterfaceIndex -ErrorAction SilentlyContinue; if ($a) { "$($_.IPAddress) $($a.MacAddress)" } }',
+      ]);
+      final out = <String, String>{};
+      for (final line in r.stdout.toString().split('\n')) {
+        final parts = line.trim().split(RegExp(r'\s+'));
+        if (parts.length == 2 && RegExp(r'^([0-9A-Fa-f]{2}[-:]){5}[0-9A-Fa-f]{2}$').hasMatch(parts[1])) {
+          out[parts[0]] = parts[1].replaceAll('-', ':').toUpperCase();
+        }
+      }
+      _macs = out;
+    } catch (_) {}
+  }
 
   Future<Map<String, dynamic>?> _onMessage(Peer peer, Map<String, dynamic> m) async {
     final t = m['t']?.toString();
@@ -562,6 +668,7 @@ class Kopru extends ChangeNotifier {
         }
         if (m['battery'] is num) peer.battery = (m['battery'] as num).toInt();
         peer.charging = m['charging'] == true;
+        _batteryAlert(peer);
         notifyListeners();
         return {'ok': true, ..._statusFields()};
       case 'text':
@@ -635,6 +742,13 @@ class Kopru extends ChangeNotifier {
           await _mediaKey(m['key']?.toString() ?? '');
         }
         return null;
+      case 'locate':
+        if (!isPhone) return {'error': 'yok'};
+        if (!locateAllowed) return {'error': 'kapali'};
+        final loc = await Native.locate();
+        if (loc == null) return {'error': 'yok'};
+        if (loc['permission'] == false) return {'error': 'izin'};
+        return {'loc': loc};
       case 'input':
         if (Platform.isWindows) await _input(m);
         return null;
@@ -1315,6 +1429,11 @@ class Kopru extends ChangeNotifier {
     for (final p in only != null ? [only] : peers.where((p) => p.online).toList()) {
       final r = await _send(p, m);
       if (r != null) {
+        final macs = r['macs'];
+        if (macs is Map && macs.isNotEmpty) {
+          final mac = macs[p.addrs.isNotEmpty ? p.addrs.first : ''] ?? macs.values.first;
+          if (mac != null) _prefs.setString('mac:${p.id}', mac.toString());
+        }
         final n = r['name']?.toString();
         if (n != null && n.isNotEmpty && n != p.name) {
           p.name = n;
@@ -1360,7 +1479,7 @@ class Kopru extends ChangeNotifier {
 
   /// Dosyaları sırayla gönderir. Toplu gönderimin kimliğini döndürür (gönderim ekranı için).
   /// Klasörler içindeki dosyalarla birlikte gönderilir; karşıda aynı klasör yapısı kurulur.
-  String sendFiles(Peer p, List<String> paths, {bool deleteAfter = false}) {
+  String sendFiles(Peer p, List<String> paths, {bool deleteAfter = false, bool print = false}) {
     final batch = b64u(randomBytes(6));
     final items = <(ActiveTransfer, File)>[];
     void add(File f, String dir) {
@@ -1372,6 +1491,7 @@ class Kopru extends ChangeNotifier {
         peerId: p.id,
         batch: batch,
         dir: dir,
+        print: print,
       );
       active.add(t);
       items.add((t, f));
@@ -1423,6 +1543,124 @@ class Kopru extends ChangeNotifier {
     }();
     return batch;
   }
+
+  // ---------------------------------------------------------------- otomatik eylemler
+
+  Future<void> setAutoLock(bool v) async {
+    autoLock = v;
+    await _prefs.setBool('autoLock', v);
+    notifyListeners();
+  }
+
+  Future<void> setAutoWake(bool v) async {
+    autoWake = v;
+    await _prefs.setBool('autoWake', v);
+    notifyListeners();
+  }
+
+  Future<void> setBatteryAlerts(bool v) async {
+    batteryAlerts = v;
+    await _prefs.setBool('batteryAlerts', v);
+    notifyListeners();
+  }
+
+  Future<void> _automations() async {
+    final now = DateTime.now();
+    if (Platform.isWindows && autoLock) {
+      // Telefon (aynı Wi-Fi'de görülmüşken) 2 dakika görünmezse bilgisayarı kilitle
+      for (final p in peers.where((p) => p.isPhone)) {
+        if (p.lanOnline) {
+          _wasNear[p.id] = now;
+          _lockedFor.remove(p.id);
+        } else {
+          final last = _wasNear[p.id];
+          if (last != null && now.difference(last) > const Duration(minutes: 2) && !_lockedFor.contains(p.id)) {
+            _lockedFor.add(p.id);
+            await Process.run('rundll32.exe', ['user32.dll,LockWorkStation']);
+          }
+        }
+      }
+    }
+    if (isPhone && autoWake) {
+      // Bilgisayarla aynı ağa gelince (ve bilgisayar görünmüyorsa) Wake-on-LAN
+      for (final p in peers.where((p) => p.isComputer && !p.lanOnline && p.addrs.isNotEmpty)) {
+        final mac = _prefs.getString('mac:${p.id}');
+        if (mac == null) continue;
+        if (_lastWake != null && now.difference(_lastWake!) < const Duration(minutes: 10)) continue;
+        final mine = await localAddresses();
+        String net(String a) => a.split('.').take(3).join('.');
+        if (!mine.any((a) => net(a) == net(p.addrs.first))) continue;
+        _lastWake = now;
+        await wake(p);
+      }
+    }
+  }
+
+  /// Wake-on-LAN "sihirli paket" (bilgisayarın ağ kartında açık olmalı).
+  Future<bool> wake(Peer p) async {
+    final mac = _prefs.getString('mac:${p.id}');
+    if (mac == null) return false;
+    final bytes = mac.split(':').map((h) => int.parse(h, radix: 16)).toList();
+    if (bytes.length != 6) return false;
+    final packet = Uint8List.fromList([...List.filled(6, 0xFF), for (var i = 0; i < 16; i++) ...bytes]);
+    try {
+      final sock = await RawDatagramSocket.bind(InternetAddress.anyIPv4, 0);
+      sock.broadcastEnabled = true;
+      final targets = {'255.255.255.255', if (p.addrs.isNotEmpty) '${p.addrs.first.split('.').take(3).join('.')}.255'};
+      for (final t in targets) {
+        for (final port in [9, 7]) {
+          sock.send(packet, InternetAddress(t), port);
+        }
+      }
+      sock.close();
+      return true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  bool canWake(Peer p) => _prefs.getString('mac:${p.id}') != null;
+
+  void _batteryAlert(Peer p) {
+    if (!Platform.isWindows || !batteryAlerts || p.battery == null) return;
+    final b = p.battery!;
+    String? kind;
+    if (!p.charging && b <= 15) kind = 'low';
+    if (p.charging && b >= 100) kind = 'full';
+    if (kind == null) {
+      if (b > 20 && b < 95) _lastBatteryAlert.remove(p.id); // sonraki uyarıya hazır
+      return;
+    }
+    if (_lastBatteryAlert[p.id] == kind) return;
+    _lastBatteryAlert[p.id] = kind;
+    Notifier.show(
+      kind == 'low' ? L('{0}: pil azaldı (%{1})', [p.name, b]) : L('{0}: pil doldu', [p.name]),
+      kind == 'low' ? L('Telefonu şarja tak.') : L('Şarj aletinden çıkarabilirsin.'),
+      always: true,
+    );
+  }
+
+  // ---------------------------------------------------------------- telefonu bul
+
+  Future<void> setLocateAllowed(bool v) async {
+    locateAllowed = v;
+    await _prefs.setBool('locateAllowed', v);
+    notifyListeners();
+  }
+
+  /// Bilgisayar: telefonun konumu. (konum, hata) hata: izin | kapali | yok | baglanti
+  Future<(Map<String, dynamic>?, String?)> locatePhone(Peer p) async {
+    final r = await _send(p, {'t': 'locate'}, replyTimeout: const Duration(seconds: 25));
+    if (r == null) return (null, 'baglanti');
+    if (r['error'] != null) return (null, r['error'].toString());
+    final loc = r['loc'];
+    return loc is Map ? (Map<String, dynamic>.from(loc), null) : (null, 'yok');
+  }
+
+  // ---------------------------------------------------------------- yazdırma
+
+  /// Telefon: dosyaları bilgisayarda varsayılan yazıcıdan yazdır.
+  String printOnComputer(Peer p, List<String> paths) => sendFiles(p, paths, print: true);
 
   // ---------------------------------------------------------------- eşleştirmeden gönderme
 
@@ -1747,7 +1985,7 @@ class Kopru extends ChangeNotifier {
   }
 
   Future<Map<String, dynamic>> _fileMeta(ActiveTransfer t) async =>
-      _stamp({'name': t.name, 'size': t.size, 'id': t.id, if (t.dir.isNotEmpty) 'dir': t.dir, if (t.backup) 'backup': true});
+      _stamp({'name': t.name, 'size': t.size, 'id': t.id, if (t.dir.isNotEmpty) 'dir': t.dir, if (t.backup) 'backup': true, if (t.print) 'print': true});
 
   Future<void> _sendFile(Peer p, File f, ActiveTransfer t) async {
     t.state = 'running';
@@ -2096,7 +2334,11 @@ class Kopru extends ChangeNotifier {
       mime: mimeFor(name),
       ok: location != null,
     ));
-    if (location != null) {
+    if (location != null && meta['print'] == true && Platform.isWindows) {
+      // Telefondan "Bilgisayarda yazdır": varsayılan uygulamanın yazdır komutu
+      final ok = await _printFile(location);
+      await Notifier.show(ok ? L('Yazdırılıyor') : L('Yazdırılamadı'), name, always: true);
+    } else if (location != null) {
       _emit(KopruEvent('received', peer: peer, text: name));
       _notifyReceived(peer, sub.isEmpty ? name : '${sub.split('/').first}/', location, name);
     }
@@ -2127,6 +2369,21 @@ class Kopru extends ChangeNotifier {
           onClick: Platform.isWindows && loc != null ? () => Process.run('explorer.exe', ['/select,', loc]) : null);
       _recvNames.clear();
     });
+  }
+
+  Future<bool> _printFile(String path) async {
+    try {
+      final esc = path.replaceAll("'", "''");
+      final r = await Process.run('powershell', [
+        '-NoProfile',
+        '-NonInteractive',
+        '-Command',
+        "Start-Process -FilePath '$esc' -Verb Print",
+      ]);
+      return r.exitCode == 0;
+    } catch (_) {
+      return false;
+    }
   }
 
   Future<void> openHistoryItem(HistoryItem h) async {

@@ -54,6 +54,8 @@ Name: "{autodesktop}\Pusula Köprü"; Filename: "{app}\{#AppExe}"; Tasks: deskto
 [Registry]
 ; Uygulama "Windows açılınca başlat" için bu değeri kendisi yazar; kaldırınca silinsin
 Root: HKCU; Subkey: "Software\Microsoft\Windows\CurrentVersion\Run"; ValueType: none; ValueName: "PusulaKopru"; Flags: uninsdeletevalue dontcreatekey
+Root: HKCU; Subkey: "Software\Classes\*\shell\PusulaKopru"; ValueType: none; Flags: uninsdeletekey dontcreatekey
+Root: HKCU; Subkey: "Software\Classes\Directory\shell\PusulaKopru"; ValueType: none; Flags: uninsdeletekey dontcreatekey
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/c taskkill /im pusula_kopru.exe /f"; Flags: runhidden; RunOnceId: "KopruKapat"

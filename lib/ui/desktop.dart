@@ -358,6 +358,12 @@ class _DesktopHomeState extends State<DesktopHome> {
             onPressed: () => _ring(p),
             icon: Icon(Icons.notifications_active_outlined, size: 18),
             label: Text(L('Telefonu çaldır')),
+          SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: () => showLocateDialog(context, p),
+            icon: Icon(Icons.location_searching, size: 18),
+            label: Text(L('Telefonu bul')),
+          ),
           ),
           SizedBox(height: 8),
           OutlinedButton.icon(
@@ -903,6 +909,20 @@ class _SettingsDialogState extends State<SettingsDialog> {
               Switch(value: k.relayOn, onChanged: k.setRelay),
             ]),
             SizedBox(height: 16),
+            _SettingSwitch(
+              title: L('Telefon uzaklaşınca bilgisayarı kilitle'),
+              text: L('Telefon 2 dakika boyunca aynı Wi-Fi\'de görünmezse bilgisayar kilitlenir.'),
+              value: k.autoLock,
+              onChanged: k.setAutoLock,
+            ),
+            SizedBox(height: 16),
+            _SettingSwitch(
+              title: L('Telefonun pili azalınca ya da dolunca haber ver'),
+              text: L('%15\'in altına inince ve şarj dolunca Windows bildirimi.'),
+              value: k.batteryAlerts,
+              onChanged: k.setBatteryAlerts,
+            ),
+            SizedBox(height: 16),
             Row(children: [
               Expanded(
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
@@ -913,6 +933,9 @@ class _SettingsDialogState extends State<SettingsDialog> {
               ),
               Switch(value: k.autostart, onChanged: k.setAutostart),
             ]),
+            SizedBox(height: 16),
+            Text(L('Gezgin\'de bir dosyaya sağ tıkla → "Pusula Köprü ile telefona gönder" (Windows 11\'de önce "Diğer seçenekleri göster").'),
+                style: oaBody(13, color: OA.muted, height: 1.4)),
             SizedBox(height: 16),
             Text(L('Gelen dosyalar'), style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
             SizedBox(height: 6),
@@ -1042,4 +1065,24 @@ class _NotifTileState extends State<NotifTile> {
       ]),
     );
   }
+}
+
+
+class _SettingSwitch extends StatelessWidget {
+  const _SettingSwitch({required this.title, required this.text, required this.value, required this.onChanged});
+  final String title;
+  final String text;
+  final bool value;
+  final ValueChanged<bool> onChanged;
+
+  @override
+  Widget build(BuildContext context) => Row(children: [
+        Expanded(
+          child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text(title, style: oaBody(15, weight: FontWeight.w600)),
+            Text(text, style: oaBody(13, color: OA.muted)),
+          ]),
+        ),
+        Switch(value: value, onChanged: onChanged),
+      ]);
 }

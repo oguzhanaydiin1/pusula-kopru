@@ -107,6 +107,15 @@ class Native {
 
   static Future<String?> copyMedia(String id, String name) => _call<String>('copyMedia', {'id': id, 'name': name});
 
+  /// Telefonun konumu: {lat, lon, acc, time, provider} | {permission: false} | null
+  static Future<Map<String, dynamic>?> locate() async {
+    final v = await _call<Map>('locate');
+    return v == null ? null : Map<String, dynamic>.from(v);
+  }
+
+  static Future<bool> locationPermission() async => await _call<bool>('locationPermission') ?? false;
+  static Future<void> requestLocation({bool background = false}) => _call('requestLocation', {'background': background});
+
   static Future<void> setLang(String lang) => _call('setLang', {'lang': lang});
 
   static Future<void> captureVolume(bool on) => _call('captureVolume', {'on': on});

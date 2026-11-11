@@ -19,6 +19,9 @@ Future<void> main(List<String> args) async {
   Native.setLang(Lang.en ? 'en' : 'tr');
   await Notifier.init();
   await DesktopHost.i.init(args);
+  // Gezgin sağ tık menüsü: pusula_kopru.exe --send "dosya"
+  final si = args.indexOf('--send');
+  if (si >= 0) Kopru.i.pendingSend = args.sublist(si + 1);
   await Kopru.i.start();
   runApp(const KopruApp());
 }

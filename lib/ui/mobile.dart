@@ -194,6 +194,14 @@ class _HomeTab extends StatelessWidget {
     });
   }
 
+  Future<void> _print(BuildContext context, Peer p) async {
+    final r = await FilePicker.platform.pickFiles(allowMultiple: true);
+    final paths = r?.files.map((f) => f.path).whereType<String>().toList() ?? const <String>[];
+    if (paths.isEmpty || !context.mounted) return;
+    final batch = Kopru.i.printOnComputer(p, paths);
+    Navigator.of(context).push(MaterialPageRoute(builder: (_) => SendingScreen(batch: batch, title: L('Bilgisayarda yazdır'))));
+  }
+
   Future<void> _screenshot(BuildContext context, Peer p) async {
     final (batch, err) = await Kopru.i.sendLatestScreenshot(p);
     if (!context.mounted) return;
@@ -326,6 +334,7 @@ class _HomeTab extends StatelessWidget {
       (L('Panoyu gönder'), Icons.content_paste_go_outlined, () => _sendClip(context, p)),
       (L('Son ekran görüntüsü'), Icons.screenshot_outlined, () => _screenshot(context, p)),
       if (p.isComputer) (L('Bilgisayarı kilitle'), Icons.lock_outline, () => _lock(context, p)),
+      if (p.isComputer) (L('Bilgisayarda yazdır'), Icons.print_outlined, () => _print(context, p)),
     ];
     final running = k.active.toList();
     final inc = k.lastIncoming;
@@ -721,6 +730,29 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
               await k.setBrowseAllowed(v);
               if (v && !await Native.mediaPermission()) await Native.requestMedia();
             },
+          ),
+          SizedBox(height: 16),
+          _switchRow(
+            L('Telefonu bul: bilgisayar konumumu görebilsin'),
+            L('Bilgisayardan "Telefonu bul" deyince telefonun konumu haritada görünür. Uygulama kapalıyken de çalışması için konum iznine "Her zaman izin ver" de.'),
+            k.locateAllowed,
+            (v) async {
+              await k.setLocateAllowed(v);
+              if (v) {
+                if (!await Native.locationPermission()) {
+                  await Native.requestLocation();
+                } else {
+                  await Native.requestLocation(background: true);
+                }
+              }
+            },
+          ),
+          SizedBox(height: 16),
+          _switchRow(
+            L('Eve gelince bilgisayarı uyandır'),
+            L('Telefon bilgisayarla aynı Wi-Fi\'ye girince uyuyan bilgisayara uyandırma sinyali (Wake-on-LAN) gönderir. Bilgisayarın ağ kartında bu özellik açık olmalı.'),
+            k.autoWake,
+            k.setAutoWake,
           ),
           SizedBox(height: 16),
           _switchRow(
