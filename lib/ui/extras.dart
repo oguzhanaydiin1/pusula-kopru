@@ -622,12 +622,17 @@ Future<void> showOfferDialog(BuildContext context, NearOffer o) async {
         child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
           Text(L('{0} öğe · {1}', [o.files.length, formatSize(o.total)]), style: oaBody(15, weight: FontWeight.w600)),
           SizedBox(height: 6),
-          Text(o.files.take(4).join(', ') + (o.files.length > 4 ? '…' : ''),
-              maxLines: 3, overflow: TextOverflow.ellipsis, style: oaBody(14, color: OA.text2)),
+          if (o.files.any((f) => f.isNotEmpty))
+            Text(o.files.take(4).join(', ') + (o.files.length > 4 ? '…' : ''),
+                maxLines: 3, overflow: TextOverflow.ellipsis, style: oaBody(14, color: OA.text2)),
+          if (o.btId != null) ...[
+            SizedBox(height: 8),
+            OAChip(icon: Icons.bluetooth, label: L('Bluetooth ile bulundu · internetsiz')),
+          ],
           SizedBox(height: 16),
           Text(L('Gönderenin ekranındaki kod bununla aynı mı?'), style: oaBody(14, color: OA.muted)),
           SizedBox(height: 6),
-          Text(o.sas, style: oaDisplay(32).copyWith(letterSpacing: 2)),
+          Text(o.btId != null ? o.sas.split('').join(' ') : o.sas, style: oaDisplay(32).copyWith(letterSpacing: 2, color: o.btId != null ? OA.amber : null)),
         ]),
       ),
       actions: [

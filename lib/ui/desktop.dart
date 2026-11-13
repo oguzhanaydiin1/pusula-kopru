@@ -13,6 +13,7 @@ import '../core/notifier.dart';
 import '../theme.dart';
 import '../updater.dart';
 import 'extras.dart';
+import 'nearby_ui.dart';
 import 'widgets.dart';
 
 /// Bilgisayar ana penceresi (taslaktaki "Bilgisayar — ana pencere").
@@ -149,6 +150,48 @@ class _DesktopHomeState extends State<DesktopHome> {
                     style: oaBody(15, color: OA.text2, height: 1.5)),
                 SizedBox(height: 16),
                 NearbyPanel(),
+                SizedBox(height: 20),
+                Divider(color: OA.border),
+                SizedBox(height: 12),
+                Text(L('Kodla (internet üzerinden)'), style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
+                SizedBox(height: 4),
+                Text(L('Farklı ağdaki, eşleşmemiş bir cihazla: biri kodu gösterir, öbürü yazar. Dosya başına en fazla 100 MB.'),
+                    style: oaBody(13, color: OA.muted, height: 1.4)),
+                SizedBox(height: 10),
+                Row(children: [
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: () async {
+                        final r = await FilePicker.platform.pickFiles(allowMultiple: true);
+                        final paths = r?.files.map((f) => f.path).whereType<String>().toList() ?? <String>[];
+                        if (paths.isEmpty || !ctx.mounted) return;
+                        Navigator.pop(ctx);
+                        if (!mounted) return;
+                        await showCodeSendDialog(context, Kopru.i.sendWithCode(paths));
+                      },
+                      icon: Icon(Icons.upload_outlined, size: 18),
+                      label: Text(L('Kodla gönder')),
+                    ),
+                  ),
+                  SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () {
+                        Navigator.pop(ctx);
+                        showDialog(
+                          context: context,
+                          builder: (c2) => AlertDialog(
+                            title: Text(L('Kodla al'), style: oaDisplay(24)),
+                            content: SizedBox(width: 420, child: CodeEntry(inDialog: true)),
+                            actions: [TextButton(onPressed: () => Navigator.pop(c2), child: Text(L('Kapat')))],
+                          ),
+                        );
+                      },
+                      icon: Icon(Icons.download_outlined, size: 18),
+                      label: Text(L('Kodla al')),
+                    ),
+                  ),
+                ]),
               ]),
             ),
           ),

@@ -15,6 +15,7 @@ import '../theme.dart';
 import '../updater.dart';
 import 'desktop.dart' show TransferRow, confirmUnpair;
 import 'extras.dart';
+import 'nearby_ui.dart';
 import 'widgets.dart';
 
 /// Telefon: alt menülü ana kabuk.
@@ -1181,23 +1182,3 @@ class SendingScreen extends StatelessWidget {
 }
 
 
-class NearbyScreen extends StatelessWidget {
-  NearbyScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: Text(L('Yakındakiler'), style: oaDisplay(20))),
-      body: ListView(
-        padding: EdgeInsets.all(16),
-        children: [
-          Text(L('Eşleştirmeden, aynı Wi-Fi\'deki birine tek seferlik dosya gönder ya da al. ') +
-              L('Karşı taraf her gönderimi onaylar; dosyalar şifreli gider.'),
-              style: oaBody(15, color: OA.text2, height: 1.5)),
-          SizedBox(height: 16),
-          NearbyPanel(),
-        ],
-      ),
-    );
-  }
-}
