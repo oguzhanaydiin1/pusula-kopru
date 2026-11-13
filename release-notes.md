@@ -1,5 +1,10 @@
 # Sürüm notları
 
+## 0.7.0
+- **Kodla gönder:** Eşleştirmeden, farklı ağdaki birine dosya gönder. Ekranda "7-ayva-kalem" gibi bir kod ve QR çıkar; karşı taraf kodu yazar ya da okutur, önce gelenleri görür, sonra "Al" der. Kodun kelimeleri sunucuya hiç gitmez (SPAKE2); dosyalar uçtan uca şifreli. Telefon ve bilgisayarda; dosya başına en fazla 100 MB, kod 10 dakika geçerli.
+- **İnternetsiz gönder (telefondan telefona):** Wi-Fi ağı ya da internet olmadan, yakındaki bir Android telefona. Cihazlar Bluetooth ile bulunur, dosya doğrudan Wi-Fi ile hızlıca gider; mobil veri harcamaz. İki ekranda aynı 4 haneli kod görünür, alan taraf onaylar.
+- **Radar:** Yakındakiler ekranı gemi radarı gibi tarıyor; bulunan cihaza dokun, dosyalar gitsin. Gönder ekranında "Yakındakiler | Kodla" sekmeleri.
+
 ## 0.6.0
 - **Sağ tıkla gönder:** Windows Gezgini'nde dosya ya da klasöre sağ tıkla → "Pusula Köprü ile telefona gönder". Windows 11'de "Diğer seçenekleri göster" altında.
 - **Bilgisayarda yazdır:** Telefondan seçtiğin dosyalar bilgisayarın varsayılan yazıcısından çıkar.
