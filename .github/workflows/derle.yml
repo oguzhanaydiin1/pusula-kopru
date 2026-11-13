@@ -9,7 +9,7 @@ name: Derle
 # eklenirse her sürüm aynı anahtarla imzalanır (Pusula'dakiyle aynı anahtar kullanılabilir).
 on:
   push:
-    branches: [main]
+    branches: [main, deneme]
   workflow_dispatch:
 
 permissions:
@@ -53,6 +53,10 @@ jobs:
         shell: bash
         run: bash scripts/ozetle.sh analiz flutter analyze --no-fatal-infos --no-fatal-warnings
 
+      - name: Birim testleri
+        shell: bash
+        run: bash scripts/ozetle.sh test flutter test
+
       - name: Derle
         shell: bash
         run: bash scripts/ozetle.sh windows flutter build windows --release --dart-define=APP_VERSION=${{ steps.ver.outputs.v }}
@@ -78,6 +82,7 @@ jobs:
             Pusula-Kopru-Windows.zip
 
       - name: Sürüme ekle
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.v }}
@@ -150,6 +155,7 @@ jobs:
           path: Pusula-Kopru-Android.apk
 
       - name: Sürüme ekle
+        if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2
         with:
           tag_name: v${{ steps.ver.outputs.v }}

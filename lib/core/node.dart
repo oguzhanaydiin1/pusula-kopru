@@ -1,9 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math' show Random;
 import 'dart:typed_data';
 
-import 'package:cryptography/cryptography.dart' show Hmac, SecretKey;
+import 'package:cryptography/cryptography.dart' show Hmac, SecretKey, Sha256;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
@@ -19,7 +20,11 @@ import 'models.dart';
 import 'native.dart';
 import 'notifier.dart';
 import 'relay.dart';
+import 'spake2.dart';
 import 'win_input.dart';
+import 'words.dart';
+
+part 'code_send.dart';
 
 /// Pusula Köprü'nün çekirdeği.
 ///
@@ -138,6 +143,8 @@ class Kopru extends ChangeNotifier {
   final _events = StreamController<KopruEvent>.broadcast();
   Stream<KopruEvent> get events => _events.stream;
   void _emit(KopruEvent e) => _events.add(e);
+
+  void _touch() => notifyListeners();
 
   Peer? get selected {
     if (peers.isEmpty) return null;
