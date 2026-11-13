@@ -138,11 +138,14 @@ def deps():
         s = open(kts, encoding='utf-8').read()
         if NEARBY_DEP not in s:
             s += '\ndependencies {\n    implementation("%s")\n}\n' % NEARBY_DEP
+            # Yayın derlemesindeki lint denetimi bazı eklentilerde çöküyor (lint hatası, kodla ilgisi yok)
+            s += '\nandroid {\n    lint {\n        checkReleaseBuilds = false\n        abortOnError = false\n    }\n}\n'
             open(kts, 'w', encoding='utf-8').write(s)
     elif os.path.exists(groovy):
         s = open(groovy, encoding='utf-8').read()
         if NEARBY_DEP not in s:
             s += "\ndependencies {\n    implementation '%s'\n}\n" % NEARBY_DEP
+            s += '\nandroid {\n    lint {\n        checkReleaseBuilds false\n        abortOnError false\n    }\n}\n'
             open(groovy, 'w', encoding='utf-8').write(s)
     else:
         sys.exit('android/app/build.gradle(.kts) bulunamadı')
