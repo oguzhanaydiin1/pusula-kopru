@@ -32,6 +32,12 @@ PERMS = [
     'android.permission.ACCESS_COARSE_LOCATION',
     'android.permission.ACCESS_FINE_LOCATION',
     'android.permission.ACCESS_BACKGROUND_LOCATION',
+    # İnternetsiz gönderme (Nearby Connections: Bluetooth ile bulma, doğrudan Wi-Fi ile aktarım)
+    'android.permission.CHANGE_WIFI_STATE',
+    'android.permission.BLUETOOTH_SCAN',
+    'android.permission.BLUETOOTH_ADVERTISE',
+    'android.permission.BLUETOOTH_CONNECT',
+    'android.permission.NEARBY_WIFI_DEVICES',
 ]
 
 # Arka plan hizmeti, açılışta başlatma ve (0.3) bildirim aynası
@@ -88,6 +94,9 @@ def manifest():
         comp = COMPONENTS + (MIRROR if os.environ.get('KOPRU_MIRROR') == '1' else '')
         i = s.rfind('</application>')
         s = s[:i] + comp.strip('\n') + '\n    ' + s[i:]
+    for old in ('BLUETOOTH', 'BLUETOOTH_ADMIN'):
+        if 'android.permission.%s"' % old not in s:
+            s = s.replace('<application', '<uses-permission android:name="android.permission.%s" android:maxSdkVersion="30"/>\n    <application' % old, 1)
     if 'WRITE_EXTERNAL_STORAGE' not in s:
         s = s.replace('<application', '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>\n    <application', 1)
     if 'android.hardware.camera' not in s:
@@ -117,6 +126,27 @@ def native():
                 '-keep class com.google.android.gms.internal.mlkit_vision_common.** { *; }\n'
                 '-dontwarn com.google.mlkit.**\n')
     print('Android: MainActivity ve ProGuard kuralları kopyalandı')
+
+
+NEARBY_DEP = 'com.google.android.gms:play-services-nearby:19.5.1'
+
+
+def deps():
+    kts = 'android/app/build.gradle.kts'
+    groovy = 'android/app/build.gradle'
+    if os.path.exists(kts):
+        s = open(kts, encoding='utf-8').read()
+        if NEARBY_DEP not in s:
+            s += '\ndependencies {\n    implementation("%s")\n}\n' % NEARBY_DEP
+            open(kts, 'w', encoding='utf-8').write(s)
+    elif os.path.exists(groovy):
+        s = open(groovy, encoding='utf-8').read()
+        if NEARBY_DEP not in s:
+            s += "\ndependencies {\n    implementation '%s'\n}\n" % NEARBY_DEP
+            open(groovy, 'w', encoding='utf-8').write(s)
+    else:
+        sys.exit('android/app/build.gradle(.kts) bulunamadı')
+    print('Bağımlılık: Nearby Connections eklendi')
 
 
 def signing():
@@ -166,4 +196,5 @@ def signing():
 if __name__ == '__main__':
     manifest()
     native()
+    deps()
     signing()

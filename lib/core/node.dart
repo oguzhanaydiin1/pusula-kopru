@@ -24,6 +24,7 @@ import 'spake2.dart';
 import 'win_input.dart';
 import 'words.dart';
 
+part 'bt_send.dart';
 part 'code_send.dart';
 
 /// Pusula Köprü'nün çekirdeği.
@@ -141,6 +142,9 @@ class Kopru extends ChangeNotifier {
   String? startError;
 
   final _events = StreamController<KopruEvent>.broadcast();
+
+  /// İnternetsiz gönderme (Android, Bluetooth + doğrudan Wi-Fi)
+  late final BtHub bt = BtHub._(this);
   Stream<KopruEvent> get events => _events.stream;
   void _emit(KopruEvent e) => _events.add(e);
 
@@ -227,6 +231,7 @@ class Kopru extends ChangeNotifier {
     }
     if (Platform.isAndroid) {
       await Native.multicast();
+      unawaited(bt.init());
       Native.onNotification = _mirrorOut;
       Native.onNotificationRemoved = (key) {
         if (!mirror) return;
@@ -956,6 +961,7 @@ class Kopru extends ChangeNotifier {
     if (visibleUntil != null && !isVisible) {
       visibleUntil = null;
       _offers.clear();
+      unawaited(bt.advertise(false));
       notifyListeners();
     }
     if (nearby.length != before || visible.length != vb) notifyListeners();
@@ -1677,7 +1683,9 @@ class Kopru extends ChangeNotifier {
       _nearKeyPair = await PairCrypto.newKeyPair();
       _nearPub = await PairCrypto.publicBytes(_nearKeyPair);
       visibleUntil = DateTime.now().add(const Duration(minutes: 10));
+      unawaited(bt.advertise(true));
     } else {
+      unawaited(bt.advertise(false));
       visibleUntil = null;
       _nearKeyPair = null;
       _nearPub = null;
@@ -1737,19 +1745,20 @@ class Kopru extends ChangeNotifier {
   static String _short(String s, int n) => s.length <= n ? s : s.substring(0, n);
 
   void answerOffer(NearOffer o, bool accept) {
+    if (o.btId != null) return bt.answer(o, accept);
     _offerAnswers[o.id]?.complete(accept);
   }
 
   Future<void> _handleNearFile(HttpRequest req) async {
     final o = _offers[req.headers.value('x-k-offer') ?? ''];
-    if (o == null || !o.accepted || DateTime.now().isAfter(o.expires)) {
+    if (o == null || o.key == null || !o.accepted || DateTime.now().isAfter(o.expires)) {
       await _readAll(req, 1 << 16).catchError((_) => Uint8List(0));
       return await _reply(req, 403);
     }
-    final temp = Peer(id: 'yakin:${o.id}', name: o.name, platform: o.platform, key: o.key, addrs: const [], port: 0);
+    final temp = Peer(id: 'yakin:${o.id}', name: o.name, platform: o.platform, key: o.key!, addrs: const [], port: 0);
     final Map<String, dynamic> meta;
     try {
-      meta = await o.key.openJson(unb64u(req.headers.value('x-k-meta') ?? ''));
+      meta = await o.key!.openJson(unb64u(req.headers.value('x-k-meta') ?? ''));
     } catch (_) {
       return await _reply(req, 403);
     }

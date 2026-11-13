@@ -13,6 +13,7 @@ class Native {
   static void Function(Map<String, dynamic>)? onNotification; // bildirim aynası (0.3)
   static void Function(String key)? onNotificationRemoved;
   static void Function(String dir)? onVolumeKey;
+  static void Function(Map<String, dynamic>)? onBt; // internetsiz gönderme olayları (NearbyConn.kt)
 
   static void init() {
     if (!Platform.isAndroid) return;
@@ -26,6 +27,8 @@ class Native {
           if (call.arguments is Map) onNotification?.call(Map<String, dynamic>.from(call.arguments as Map));
         case 'volumeKey':
           onVolumeKey?.call(call.arguments?.toString() ?? '');
+        case 'bt':
+          if (call.arguments is Map) onBt?.call(Map<String, dynamic>.from(call.arguments as Map));
         case 'notificationRemoved':
           onNotificationRemoved?.call(call.arguments?.toString() ?? '');
       }
@@ -115,6 +118,20 @@ class Native {
 
   static Future<bool> locationPermission() async => await _call<bool>('locationPermission') ?? false;
   static Future<void> requestLocation({bool background = false}) => _call('requestLocation', {'background': background});
+
+  // İnternetsiz gönderme (Bluetooth + doğrudan Wi-Fi)
+  static Future<bool> btAvailable() async => await _call<bool>('btAvailable') ?? false;
+  static Future<bool> btPermission() async => await _call<bool>('btPermission') ?? false;
+  static Future<bool> btRequest() async => await _call<bool>('btRequest') ?? false;
+  static Future<bool> btAdvertise(bool on, String name) async => await _call<bool>('btAdvertise', {'on': on, 'name': name}) ?? false;
+  static Future<bool> btDiscover(bool on) async => await _call<bool>('btDiscover', {'on': on}) ?? false;
+  static Future<bool> btConnect(String id, String label) async => await _call<bool>('btConnect', {'id': id, 'label': label}) ?? false;
+  static Future<void> btAnswer(String id, bool accept) => _call('btAnswer', {'id': id, 'accept': accept});
+  static Future<List<int>> btSend(String id, List<Map<String, String>> files) async =>
+      ((await _call<List>('btSend', {'id': id, 'files': files})) ?? const []).map((e) => (e as num).toInt()).toList();
+  static Future<void> btCancel(int pid) => _call('btCancel', {'pid': pid});
+  static Future<void> btDisconnect(String id) => _call('btDisconnect', {'id': id});
+  static Future<void> btStop() => _call('btStop');
 
   static Future<void> setLang(String lang) => _call('setLang', {'lang': lang});
 

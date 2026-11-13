@@ -14,7 +14,7 @@ build/
 # Platform klasörleri derleme sırasında scripts/platform_hazirla.sh ile üretilir
 /windows/
 /android/
-/test/
+/test/widget_test.dart
 
 # Derleme çıktıları
 *.apk

@@ -140,6 +140,21 @@ object NativeBridge {
                     val name = call.argument<String>("name") ?: "dosya"
                     bg(result) { MediaAccess.copy(app, id, name) }
                 }
+                "btAvailable" -> result.success(NearbyConn.available(app))
+                "btPermission" -> result.success(NearbyConn.hasPermission(app))
+                "btRequest" -> { NearbyConn.request(activityRef?.get()); result.success(activityRef?.get() != null) }
+                "btAdvertise" -> NearbyConn.advertise(app, call.argument<Boolean>("on") == true, call.argument<String>("name") ?: "Telefon") { main.post { result.success(it) } }
+                "btDiscover" -> NearbyConn.discover(app, call.argument<Boolean>("on") == true) { main.post { result.success(it) } }
+                "btConnect" -> NearbyConn.connect(app, call.argument<String>("id") ?: "", call.argument<String>("label") ?: "Telefon") { main.post { result.success(it) } }
+                "btAnswer" -> { NearbyConn.answer(app, call.argument<String>("id") ?: "", call.argument<Boolean>("accept") == true); result.success(true) }
+                "btSend" -> {
+                    @Suppress("UNCHECKED_CAST")
+                    val files = (call.argument<List<Map<String, Any?>>>("files") ?: emptyList())
+                    result.success(NearbyConn.send(app, call.argument<String>("id") ?: "", files))
+                }
+                "btCancel" -> { NearbyConn.cancel(app, (call.argument<Number>("pid") ?: 0).toLong()); result.success(true) }
+                "btDisconnect" -> { NearbyConn.disconnect(app, call.argument<String>("id") ?: ""); result.success(true) }
+                "btStop" -> { NearbyConn.stopAll(app); result.success(true) }
                 "locationPermission" -> result.success(Locator.hasPermission(app))
                 "requestLocation" -> {
                     Locator.request(activityRef?.get(), call.argument<Boolean>("background") == true)

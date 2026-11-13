@@ -206,6 +206,7 @@ class NearOffer {
     required this.sas,
     required this.key,
     required this.expires,
+    this.btId,
   });
   final String id;
   final String name;
@@ -213,8 +214,9 @@ class NearOffer {
   final List<String> files;
   final int total;
   final String sas; // iki ekranda aynı görünmesi gereken doğrulama kodu
-  final PairKey key;
+  final PairKey? key; // Bluetooth tekliflerinde yok (bağlantıyı Nearby Connections şifreler)
   final DateTime expires;
+  final String? btId; // Bluetooth ile geldiyse uç kimliği
   bool accepted = false;
 }
 
