@@ -1,5 +1,9 @@
 # Sürüm notları
 
+## 0.8.0
+- **Açık tema:** Ayarlar'da Tema: Koyu / Açık / Windows'a uy (telefonda Sistem). Sistem seçiliyse cihazın açık/koyu ayarı değişince uygulama da değişir.
+- **Uygulama hakkında:** Ayarlar'ın sonunda OA Labs mühürlü kart: sürüm, sistem ve altyapı bilgisi.
+
 ## 0.7.0
 - **Kodla gönder:** Eşleştirmeden, farklı ağdaki birine dosya gönder. Ekranda "7-ayva-kalem" gibi bir kod ve QR çıkar; karşı taraf kodu yazar ya da okutur, önce gelenleri görür, sonra "Al" der. Kodun kelimeleri sunucuya hiç gitmez (SPAKE2); dosyalar uçtan uca şifreli. Telefon ve bilgisayarda; dosya başına en fazla 100 MB, kod 10 dakika geçerli.
 - **İnternetsiz gönder (telefondan telefona):** Wi-Fi ağı ya da internet olmadan, yakındaki bir Android telefona. Cihazlar Bluetooth ile bulunur, dosya doğrudan Wi-Fi ile hızlıca gider; mobil veri harcamaz. İki ekranda aynı 4 haneli kod görünür, alan taraf onaylar.

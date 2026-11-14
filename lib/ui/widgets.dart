@@ -63,7 +63,7 @@ class OACard extends StatelessWidget {
 }
 
 class IconBox extends StatelessWidget {
-  IconBox(this.icon, {super.key, this.size = 44, this.color = OA.amber, this.radius = 14});
+  IconBox(this.icon, {super.key, this.size = 44, Color? color, this.radius = 14}) : color = color ?? OA.amber;
   final IconData icon;
   final double size;
   final Color color;

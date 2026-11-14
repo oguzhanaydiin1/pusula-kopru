@@ -15,6 +15,7 @@ import '../theme.dart';
 import '../updater.dart';
 import 'desktop.dart' show TransferRow, confirmUnpair;
 import 'extras.dart';
+import 'about.dart';
 import 'nearby_ui.dart';
 import 'widgets.dart';
 
@@ -134,9 +135,9 @@ class _MobileShellState extends State<MobileShell> with WidgetsBindingObserver {
     return AnnotatedRegion<SystemUiOverlayStyle>(
       value: SystemUiOverlayStyle(
         statusBarColor: Colors.transparent,
-        statusBarIconBrightness: Brightness.light,
+        statusBarIconBrightness: OA.koyu ? Brightness.light : Brightness.dark,
         systemNavigationBarColor: OA.bg2,
-        systemNavigationBarIconBrightness: Brightness.light,
+        systemNavigationBarIconBrightness: OA.koyu ? Brightness.light : Brightness.dark,
       ),
       child: Scaffold(
         body: SafeArea(bottom: false, child: IndexedStack(index: _tab, children: pages)),
@@ -677,6 +678,8 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
           Text(L('Ayarlar'), style: oaDisplay(30)),
           SizedBox(height: 20),
           const LanguagePicker(),
+          SizedBox(height: 12),
+          const ThemePicker(),
           const SizedBox(height: 16),
           Text(L('Bu telefonun adı'), style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
           SizedBox(height: 8),
@@ -809,8 +812,8 @@ class _SettingsTabState extends State<_SettingsTab> with WidgetsBindingObserver 
                 child: Text(_updateText ?? L('Güncellemeleri denetle')),
               ),
           ]),
-          SizedBox(height: 8),
-          Text(L('OA Labs · oalabs.dev'), style: oaBody(13, color: OA.faint)),
+          SizedBox(height: 16),
+          const AboutCard(),
         ],
       ),
     );
@@ -854,7 +857,7 @@ class _PairScreenState extends State<PairScreen> {
   }
 
   Widget _corner(Alignment a) {
-    const side = BorderSide(color: OA.amber, width: 4);
+    side = BorderSide(color: OA.amber, width: 4);
     final top = a.y < 0, left = a.x < 0;
     return Align(
       alignment: a,

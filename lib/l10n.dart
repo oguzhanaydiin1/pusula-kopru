@@ -447,4 +447,14 @@ const _en = <String, String>{
   '{0} ile bağlanıyor': 'Connecting to {0}',
   'Doğrudan Wi-Fi · internetsiz': 'Direct Wi-Fi · no internet',
   'Mobil veri harcamaz. Telefonları yakın tut.': 'Uses no mobile data. Keep the phones close.',
+  // 0.8
+  'Uygulama hakkında': 'About the app',
+  'OA Labs atölyesinde özenle yapıldı.': 'Carefully made at the OA Labs workshop.',
+  'Sürüm': 'Version',
+  'Sistem': 'System',
+  'Altyapı': 'Built with',
+  'Dosyalar cihazların arasında uçtan uca şifreli gider; OA Labs sunucusu içeriği göremez.': 'Files travel end-to-end encrypted between your devices; the OA Labs server can\'t see what\'s inside.',
+  'Tema': 'Theme',
+  'Koyu': 'Dark',
+  'Windows\'a uy': 'Match Windows',
 };

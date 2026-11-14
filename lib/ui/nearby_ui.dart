@@ -394,7 +394,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                 leading: IconBox(d.platform == 'android' ? Icons.smartphone_outlined : Icons.computer_outlined),
                 title: Text(d.name, style: oaBody(15, weight: FontWeight.w600)),
                 subtitle: Text(L('Aynı Wi-Fi'), style: oaBody(13, color: OA.muted)),
-                trailing: const Icon(Icons.chevron_right, color: OA.muted),
+                trailing: Icon(Icons.chevron_right, color: OA.muted),
                 onTap: () => _sendLan(d),
               ),
             for (final d in bt)
@@ -402,7 +402,7 @@ class _NearbyScreenState extends State<NearbyScreen> {
                 leading: IconBox(Icons.smartphone_outlined),
                 title: Text(d.name, style: oaBody(15, weight: FontWeight.w600)),
                 subtitle: Text(L('Bluetooth · internetsiz'), style: oaBody(13, color: OA.muted)),
-                trailing: const Icon(Icons.chevron_right, color: OA.muted),
+                trailing: Icon(Icons.chevron_right, color: OA.muted),
                 onTap: () => _sendBt(d),
               ),
           ]),
@@ -750,7 +750,7 @@ class CodeReceiveView extends StatelessWidget {
                 for (final f in r.files.take(6))
                   ListTile(
                     dense: true,
-                    leading: const Icon(Icons.insert_drive_file_outlined, color: OA.text2),
+                    leading: Icon(Icons.insert_drive_file_outlined, color: OA.text2),
                     title: Text(f.$1, maxLines: 1, overflow: TextOverflow.ellipsis, style: oaBody(14, weight: FontWeight.w600)),
                     trailing: Text(formatSize(f.$2), style: oaBody(13, color: OA.muted)),
                   ),

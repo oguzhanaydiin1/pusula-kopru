@@ -13,6 +13,7 @@ import '../core/notifier.dart';
 import '../theme.dart';
 import '../updater.dart';
 import 'extras.dart';
+import 'about.dart';
 import 'nearby_ui.dart';
 import 'widgets.dart';
 
@@ -927,6 +928,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
           listenable: k,
           builder: (_, __) => Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             const LanguagePicker(),
+            SizedBox(height: 12),
+            const ThemePicker(),
             const SizedBox(height: 12),
             Text(L('Bu bilgisayarın adı'), style: oaBody(13, color: OA.muted, weight: FontWeight.w600)),
             SizedBox(height: 8),
@@ -1007,6 +1010,8 @@ class _SettingsDialogState extends State<SettingsDialog> {
                 child: Text(_updateText ?? L('Güncellemeleri denetle')),
               ),
             ]),
+            SizedBox(height: 16),
+            const AboutCard(),
           ]),
         ),
       ),
