@@ -857,7 +857,7 @@ class _PairScreenState extends State<PairScreen> {
   }
 
   Widget _corner(Alignment a) {
-    side = BorderSide(color: OA.amber, width: 4);
+    final side = BorderSide(color: OA.amber, width: 4);
     final top = a.y < 0, left = a.x < 0;
     return Align(
       alignment: a,
