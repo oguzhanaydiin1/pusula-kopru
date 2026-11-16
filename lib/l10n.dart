@@ -457,4 +457,7 @@ const _en = <String, String>{
   'Tema': 'Theme',
   'Koyu': 'Dark',
   'Windows\'a uy': 'Match Windows',
+  // 0.8.1
+  'OA Labs uygulamaları ücretsiz ve reklamsız. Beğendiysen bir kahve ısmarlayarak devam etmemize yardım edebilirsin.': 'OA Labs apps are free and ad-free. If you like them, you can help us keep going by buying us a coffee.',
+  'Bir kahve ısmarla': 'Buy us a coffee',
 };

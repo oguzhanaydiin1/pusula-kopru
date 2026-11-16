@@ -1,5 +1,8 @@
 # Sürüm notları
 
+## 0.8.1
+- **Destek ol:** Ayarlar → Uygulama hakkında kartında "Bir kahve ısmarla" düğmesi (Buy Me a Coffee). Uygulamalarımız ücretsiz ve reklamsız; isteyen buradan destek olabilir.
+
 ## 0.8.0
 - **Açık tema:** Ayarlar'da Tema: Koyu / Açık / Windows'a uy (telefonda Sistem). Sistem seçiliyse cihazın açık/koyu ayarı değişince uygulama da değişir.
 - **Uygulama hakkında:** Ayarlar'ın sonunda OA Labs mühürlü kart: sürüm, sistem ve altyapı bilgisi.

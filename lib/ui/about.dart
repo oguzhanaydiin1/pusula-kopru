@@ -7,6 +7,10 @@ import '../l10n.dart';
 import '../main.dart';
 import '../theme.dart';
 import '../updater.dart' show appVersion;
+import 'widgets.dart' show openLink;
+
+/// Destek bağlantısı (Buy Me a Coffee). Ödeme o sitenin kendi sayfasında olur.
+const kCoffeeUrl = 'https://buymeacoffee.com/oalabs';
 
 // ============================================================ Uygulama hakkında (OA Radyo ile aynı kart)
 
@@ -204,6 +208,24 @@ class AboutCard extends StatelessWidget {
         Text(L('Dosyalar cihazların arasında uçtan uca şifreli gider; OA Labs sunucusu içeriği göremez.'),
             style: oaBody(13, color: OA.muted, height: 1.45)),
         const SizedBox(height: 4),
+        const SizedBox(height: 14),
+        Container(
+          padding: const EdgeInsets.only(top: 14),
+          decoration: BoxDecoration(border: Border(top: BorderSide(color: OA.line))),
+          child: Wrap(spacing: 14, runSpacing: 10, crossAxisAlignment: WrapCrossAlignment.center, children: [
+            ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 320),
+              child: Text(L('OA Labs uygulamaları ücretsiz ve reklamsız. Beğendiysen bir kahve ısmarlayarak devam etmemize yardım edebilirsin.'),
+                  style: oaBody(13, color: OA.muted, height: 1.45)),
+            ),
+            FilledButton.icon(
+              onPressed: () => openLink(kCoffeeUrl),
+              icon: const Icon(Icons.coffee_outlined, size: 18),
+              label: Text(L('Bir kahve ısmarla')),
+            ),
+          ]),
+        ),
+        const SizedBox(height: 12),
         Text('© ${DateTime.now().year} Oğuzhan Aydın · oalabs.dev', style: oaBody(13, color: OA.muted)),
       ]),
     );
