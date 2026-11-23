@@ -1,5 +1,8 @@
 # Sürüm notları
 
+## 0.8.3
+- **Arama kayıtları:** Düğme artık telefon kartında her zaman görünüyor (Telefonu bul'un altında).
+
 ## 0.8.2
 - **Arama kayıtları (geçici):** Bağlı telefonun arama kayıtlarını bilgisayardan listeleyip seçerek ya da hepsini silme. Yalnız arama kayıtları için hazırlanan ayrı APK kurulu telefonlarda görünür; standart APK bu izni istemez.
 

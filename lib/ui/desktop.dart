@@ -410,7 +410,7 @@ class _DesktopHomeState extends State<DesktopHome> {
             icon: Icon(Icons.location_searching, size: 18),
             label: Text(L('Telefonu bul')),
           ),
-          if (k.callsPeers.contains(p.id)) ...[
+          if (!p.isComputer) ...[
             SizedBox(height: 8),
             OutlinedButton.icon(
               onPressed: () => showCallsDialog(context, p),

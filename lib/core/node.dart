@@ -241,6 +241,7 @@ class Kopru extends ChangeNotifier {
       unawaited(() async {
         callsSupported = await Native.callsAvailable();
         if (callsSupported && !await Native.callsPermission()) await Native.callsRequest();
+        if (callsSupported) unawaited(sendStatus());
       }());
       Native.onNotification = _mirrorOut;
       Native.onNotificationRemoved = (key) {
