@@ -154,6 +154,28 @@ jobs:
           name: Pusula-Kopru-Android
           path: Pusula-Kopru-Android.apk
 
+      # GEÇİCİ: arama kayıtlarını bilgisayardan silmek için ayrı APK (arama kaydı izinleriyle).
+      # Standart APK'ya girmez; "arama-kayitlari" adlı ön sürüme konur. İş bitince kaldırılacak.
+      - name: Arama kayıtlı APK (geçici)
+        env:
+          KOPRU_CALLS: '1'
+        run: |
+          python3 scripts/android_ayarla.py
+          bash scripts/ozetle.sh android-arama flutter build apk --release --dart-define=APP_VERSION=${{ steps.ver.outputs.v }}
+          cp build/app/outputs/flutter-apk/app-release.apk Pusula-Kopru-Android-Arama-Kayitlari.apk
+
+      - name: Arama kayıtlı APK'yı yayınla (geçici)
+        if: github.ref == 'refs/heads/main'
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: arama-kayitlari
+          name: Pusula Köprü · arama kayıtları (geçici)
+          target_commitish: ${{ github.sha }}
+          prerelease: true
+          make_latest: false
+          body: Arama kayıtlarını bilgisayardan görmek ve silmek için geçici APK. Standart sürümde bu izin yok.
+          files: Pusula-Kopru-Android-Arama-Kayitlari.apk
+
       - name: Sürüme ekle
         if: github.ref == 'refs/heads/main'
         uses: softprops/action-gh-release@v2

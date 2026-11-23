@@ -14,6 +14,7 @@ import '../theme.dart';
 import '../updater.dart';
 import 'extras.dart';
 import 'about.dart';
+import 'calls_ui.dart';
 import 'nearby_ui.dart';
 import 'widgets.dart';
 
@@ -409,6 +410,14 @@ class _DesktopHomeState extends State<DesktopHome> {
             icon: Icon(Icons.location_searching, size: 18),
             label: Text(L('Telefonu bul')),
           ),
+          if (k.callsPeers.contains(p.id)) ...[
+            SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: () => showCallsDialog(context, p),
+              icon: Icon(Icons.call_outlined, size: 18),
+              label: Text(L('Arama kayıtları')),
+            ),
+          ],
           SizedBox(height: 8),
           OutlinedButton.icon(
             onPressed: () => showDialog(context: context, builder: (_) => PhoneFilesDialog(peer: p)),

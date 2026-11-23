@@ -1,5 +1,8 @@
 # Sürüm notları
 
+## 0.8.2
+- **Arama kayıtları (geçici):** Bağlı telefonun arama kayıtlarını bilgisayardan listeleyip seçerek ya da hepsini silme. Yalnız arama kayıtları için hazırlanan ayrı APK kurulu telefonlarda görünür; standart APK bu izni istemez.
+
 ## 0.8.1
 - **Destek ol:** Ayarlar → Uygulama hakkında kartında "Bir kahve ısmarla" düğmesi (Buy Me a Coffee). Uygulamalarımız ücretsiz ve reklamsız; isteyen buradan destek olabilir.
 

@@ -133,6 +133,15 @@ class Native {
   static Future<void> btDisconnect(String id) => _call('btDisconnect', {'id': id});
   static Future<void> btStop() => _call('btStop');
 
+  // GEÇİCİ: arama kayıtları (yalnız KOPRU_CALLS=1 ile derlenen APK'da çalışır)
+  static Future<bool> callsAvailable() async => await _call<bool>('callsAvailable') ?? false;
+  static Future<bool> callsPermission() async => await _call<bool>('callsPermission') ?? false;
+  static Future<bool> callsRequest() async => await _call<bool>('callsRequest') ?? false;
+  static Future<List<Map<String, dynamic>>?> callsList(int limit) async =>
+      (await _call<List>('callsList', {'limit': limit}))?.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  static Future<int> callsDelete({List<int> ids = const [], bool all = false}) async =>
+      await _call<int>('callsDelete', {'ids': ids, 'all': all}) ?? -1;
+
   static Future<void> setLang(String lang) => _call('setLang', {'lang': lang});
 
   static Future<void> captureVolume(bool on) => _call('captureVolume', {'on': on});

@@ -99,6 +99,11 @@ def manifest():
             s = s.replace('<application', '<uses-permission android:name="android.permission.%s" android:maxSdkVersion="30"/>\n    <application' % old, 1)
     if 'WRITE_EXTERNAL_STORAGE' not in s:
         s = s.replace('<application', '<uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28"/>\n    <application', 1)
+    # GEÇİCİ: arama kayıtları yalnız KOPRU_CALLS=1 ile derlenen ayrı APK'da (standart APK'da yok).
+    if os.environ.get('KOPRU_CALLS') == '1':
+        for perm in ('READ_CALL_LOG', 'WRITE_CALL_LOG'):
+            if 'android.permission.%s"' % perm not in s:
+                s = s.replace('<application', '<uses-permission android:name="android.permission.%s"/>\n    <application' % perm, 1)
     if 'android.hardware.camera' not in s:
         s = s.replace('<application', '<uses-feature android:name="android.hardware.camera" android:required="false"/>\n    <application', 1)
     s = s.replace('android:label="pusula_kopru"', 'android:label="Pusula Köprü"')

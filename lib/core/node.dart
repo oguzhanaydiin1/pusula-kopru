@@ -109,6 +109,12 @@ class Kopru extends ChangeNotifier {
   // Telefonu bul
   bool locateAllowed = false; // telefon: bilgisayar konumu görebilsin
 
+  /// GEÇİCİ: bu telefon arama kayıtlarına erişebilen özel APK mı (telefon tarafı)
+  bool callsSupported = false;
+
+  /// GEÇİCİ: arama kayıtlarını destekleyen eşler (bilgisayar tarafı, telefonun durum iletisinden)
+  final callsPeers = <String>{};
+
   // Otomatik eylemler
   bool autoLock = false; // bilgisayar: telefon uzaklaşınca kilitle
   bool autoWake = false; // telefon: eve gelince bilgisayarı uyandır
@@ -232,6 +238,10 @@ class Kopru extends ChangeNotifier {
     if (Platform.isAndroid) {
       await Native.multicast();
       unawaited(bt.init());
+      unawaited(() async {
+        callsSupported = await Native.callsAvailable();
+        if (callsSupported && !await Native.callsPermission()) await Native.callsRequest();
+      }());
       Native.onNotification = _mirrorOut;
       Native.onNotificationRemoved = (key) {
         if (!mirror) return;
@@ -339,7 +349,7 @@ class Kopru extends ChangeNotifier {
   }
 
   /// Yanıt gerektiren iletiler: sunucu üzerinden de yanıt beklenir.
-  static const _needsReply = {'mlist', 'mthumb', 'mpull', 'notifReply', 'ping', 'locate'};
+  static const _needsReply = {'mlist', 'mthumb', 'mpull', 'notifReply', 'ping', 'locate', 'calls', 'callsDelete'};
 
   /// Bağlantı yolu: arayüzde "Aynı Wi-Fi · doğrudan" ya da "İnternet üzerinden · şifreli"
   bool viaRelay(Peer p) => !p.lanOnline && p.relayOnline;
@@ -643,7 +653,8 @@ class Kopru extends ChangeNotifier {
     notifyListeners();
   }
 
-  Map<String, dynamic> _statusFields() => {'name': myName, 'platform': platform, if (_macs.isNotEmpty) 'macs': _macs};
+  Map<String, dynamic> _statusFields() =>
+      {'name': myName, 'platform': platform, if (_macs.isNotEmpty) 'macs': _macs, if (callsSupported) 'calls': true};
 
   // Windows: ağ kartlarının MAC adresleri (telefon "eve gelince uyandır" için kullanır)
   Map<String, String> _macs = {};
@@ -680,6 +691,11 @@ class Kopru extends ChangeNotifier {
         }
         if (m['battery'] is num) peer.battery = (m['battery'] as num).toInt();
         peer.charging = m['charging'] == true;
+        if (m['calls'] == true) {
+          callsPeers.add(peer.id);
+        } else {
+          callsPeers.remove(peer.id);
+        }
         _batteryAlert(peer);
         notifyListeners();
         return {'ok': true, ..._statusFields()};
@@ -761,6 +777,22 @@ class Kopru extends ChangeNotifier {
         if (loc == null) return {'error': 'yok'};
         if (loc['permission'] == false) return {'error': 'izin'};
         return {'loc': loc};
+      case 'calls':
+        if (!isPhone || !callsSupported) return {'error': 'yok'};
+        if (!await Native.callsPermission()) {
+          unawaited(Native.callsRequest());
+          return {'error': 'izin'};
+        }
+        final items = await Native.callsList(((m['limit'] as num?)?.toInt() ?? 3000).clamp(1, 5000));
+        if (items == null) return {'error': 'okunamadi'};
+        return {'ok': true, 'items': items};
+      case 'callsDelete':
+        if (!isPhone || !callsSupported) return {'error': 'yok'};
+        if (!await Native.callsPermission()) return {'error': 'izin'};
+        final ids = ((m['ids'] as List?) ?? const []).map((e) => (e as num).toInt()).toList();
+        final n = await Native.callsDelete(ids: ids, all: m['all'] == true);
+        if (n < 0) return {'error': 'silinemedi'};
+        return {'ok': true, 'deleted': n};
       case 'input':
         if (Platform.isWindows) await _input(m);
         return null;
@@ -1668,6 +1700,25 @@ class Kopru extends ChangeNotifier {
     if (r['error'] != null) return (null, r['error'].toString());
     final loc = r['loc'];
     return loc is Map ? (Map<String, dynamic>.from(loc), null) : (null, 'yok');
+  }
+
+  // ---------------------------------------------------------------- arama kayıtları (GEÇİCİ)
+
+  /// Bilgisayar: telefonun arama kayıtları. Dönüş: (kayıtlar, hata kodu).
+  Future<(List<Map<String, dynamic>>?, String?)> phoneCalls(Peer p) async {
+    final r = await _send(p, {'t': 'calls', 'limit': 5000}, replyTimeout: const Duration(seconds: 40));
+    if (r == null) return (null, 'baglanti');
+    if (r['error'] != null) return (null, r['error'].toString());
+    final items = r['items'];
+    return (items is List ? items.map((e) => Map<String, dynamic>.from(e as Map)).toList() : <Map<String, dynamic>>[], null);
+  }
+
+  /// Bilgisayar: seçilen (ya da bütün) arama kayıtlarını telefondan sil. Dönüş: (silinen, hata kodu).
+  Future<(int, String?)> deletePhoneCalls(Peer p, {List<int> ids = const [], bool all = false}) async {
+    final r = await _send(p, {'t': 'callsDelete', 'ids': ids, 'all': all}, replyTimeout: const Duration(seconds: 40));
+    if (r == null) return (0, 'baglanti');
+    if (r['error'] != null) return (0, r['error'].toString());
+    return ((r['deleted'] as num?)?.toInt() ?? 0, null);
   }
 
   // ---------------------------------------------------------------- yazdırma

@@ -155,6 +155,19 @@ object NativeBridge {
                 "btCancel" -> { NearbyConn.cancel(app, (call.argument<Number>("pid") ?: 0).toLong()); result.success(true) }
                 "btDisconnect" -> { NearbyConn.disconnect(app, call.argument<String>("id") ?: ""); result.success(true) }
                 "btStop" -> { NearbyConn.stopAll(app); result.success(true) }
+                "callsAvailable" -> result.success(CallLogAccess.available(app))
+                "callsPermission" -> result.success(CallLogAccess.hasPermission(app))
+                "callsRequest" -> { CallLogAccess.request(activityRef?.get()); result.success(activityRef?.get() != null) }
+                "callsList" -> Thread {
+                    val r = try { CallLogAccess.list(app, call.argument<Int>("limit") ?: 3000) } catch (_: Exception) { null }
+                    main.post { result.success(r) }
+                }.start()
+                "callsDelete" -> Thread {
+                    @Suppress("UNCHECKED_CAST")
+                    val ids = (call.argument<List<Number>>("ids") ?: emptyList()).map { it.toLong() }
+                    val r = try { CallLogAccess.delete(app, ids, call.argument<Boolean>("all") == true) } catch (_: Exception) { -1 }
+                    main.post { result.success(r) }
+                }.start()
                 "locationPermission" -> result.success(Locator.hasPermission(app))
                 "requestLocation" -> {
                     Locator.request(activityRef?.get(), call.argument<Boolean>("background") == true)
